@@ -22,7 +22,6 @@ dependencies = [
     "pytensor",
     "scipy",
     "openghg",
-    "openghg-inversions",
 ]
 
 [project.optional-dependencies]

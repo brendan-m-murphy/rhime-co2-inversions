@@ -37,5 +37,14 @@ This package requires:
 - NumPy, Pandas, Xarray, Dask
 - PyMC >= 5.0, ArviZ, PyTensor
 - SciPy
-- OpenGHG and OpenGHG-inversions
+- OpenGHG
+
+### Optional: OpenGHG Inversions
+
+Some functionality (currently commented out in the code) requires OpenGHG Inversions, which is not available on PyPI. If needed, install it separately:
+
+```bash
+git clone https://github.com/openghg/openghg_inversions.git
+pip install -e openghg_inversions
+```
 
