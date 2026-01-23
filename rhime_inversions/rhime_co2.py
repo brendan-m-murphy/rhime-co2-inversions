@@ -18,15 +18,14 @@ from pathlib import Path
 from typing import Optional
 from collections import namedtuple
 
-sys.path.append("/user/work/wz22079/projects/rhime-co2-inversions/")
-import utils
-from model_error_methods import model_error_method_parser
-import inversion_setup as setup
-import calculate_basis_functions as cbf
-from get_co2_data import get_mf_obs_sims
+from . import utils
+from .model_error_methods import model_error_method_parser
+from . import inversion_setup as setup
+from . import calculate_basis_functions as cbf
+from .get_co2_data import get_mf_obs_sims
 
 #from tracers_co2 import get_14c_obs_sims
-from inversion_mcmc import inferpymc, inferpymc_postprocessouts
+from .inversion_mcmc import inferpymc, inferpymc_postprocessouts
 
 
 def rhime_inversions(obs_dict: dict = None,

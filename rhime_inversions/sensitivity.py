@@ -18,13 +18,11 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import Optional, Union
 
-import convert
-import calculate_basis_functions as cbf
+from . import convert
+from . import calculate_basis_functions as cbf
 from importlib import reload
 
-sys.path.append("/user/work/wz22079/projects/CO2/inversions_mk2/")
-
-from utils import combine_datasets, load_json, synonyms
+from .utils import combine_datasets, load_json, synonyms
 
 def fp_sensitivity(data_dict: dict, 
                    domain: str, 

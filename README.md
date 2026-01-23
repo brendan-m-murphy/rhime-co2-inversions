@@ -1,8 +1,41 @@
 # RHIME CO2 Inversions 
-Updated repository of RHIME code being used for CO2 inversions
 
-NB. This repository is not good and will probably need some serious software updates to get it in a usuable format (i.e. easy installation procedures etc.)
+Regional Hierarchical Inverse Modelling Environment for CO2 flux estimation.
 
-Paths will probably have to be checked in pretty much all files. And make sure you've got OpenGHG installed etc. Oh, and you'll probably need to install 'pint'.
+## Installation
 
-Anyway, it doesn't matter too much as this will all hopefully go into the main RHIME code soon!
+### Development Installation
+
+Clone the repository and install in development mode:
+
+```bash
+git clone https://github.com/brendan-m-murphy/rhime-co2-inversions.git
+cd rhime-co2-inversions
+pip install -e .
+```
+
+### Running Examples
+
+After installation, you can run examples:
+
+```bash
+python examples/example_run_rhime_202101.py
+```
+
+Or import in your own scripts:
+
+```python
+from rhime_inversions import rhime_co2
+
+# Use the package...
+```
+
+## Dependencies
+
+This package requires:
+- Python >= 3.9
+- NumPy, Pandas, Xarray, Dask
+- PyMC >= 5.0, ArviZ, PyTensor
+- SciPy
+- OpenGHG and OpenGHG-inversions
+
