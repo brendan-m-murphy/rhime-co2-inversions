@@ -16,8 +16,8 @@ from typing import Optional, Union
 from openghg.analyse import ModelScenario
 from openghg.analyse import combine_datasets as openghg_combine_datasets
 
-import convert
-import calculate_basis_functions as cbf
+from . import convert
+from . import calculate_basis_functions as cbf
 from importlib import reload
 
 def open_ds(path, chunks=None, combine=None):

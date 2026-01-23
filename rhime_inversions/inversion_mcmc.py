@@ -20,9 +20,9 @@ from scipy import stats
 from pathlib import Path
 from typing import Optional, Union
 
-import convert
-import utils
-from inversion_setup import offset_matrix
+from . import convert
+from . import utils
+from .inversion_setup import offset_matrix
 
 # from openghg_inversions.hbmcmc.hbmcmc_output import define_output_filename
 # from openghg_inversions.config.version import code_version
