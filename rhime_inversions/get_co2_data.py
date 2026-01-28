@@ -406,8 +406,8 @@ def get_mf_obs_sims(flux_dict: dict,
                                                                flux=data_dict[".flux"],
                                                                bc=data_dict[".bc"],
                                                               )
-                split_by_sector = len(flux_dict["source"]) > 1
-                scenario_combined = model_scenario.footprints_data_merge(calc_fp_x_flux=True, split_by_sector=split_by_sector)
+                split_by_sectors = len(flux_dict["source"]) > 1
+                scenario_combined = model_scenario.footprints_data_merge(calc_fp_x_flux=True, split_by_sectors=split_by_sectors)
 
                 # HACK to make new results of `footprints_data_merge` match previous format used here
                 if "source" in scenario_combined.dims:
