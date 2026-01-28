@@ -19,8 +19,6 @@ import datetime as dt
 from openghg.types import SearchError
 from openghg.retrieve import get_flux, get_bc, get_obs_surface, get_footprint
 
-from .data_checks import create_unit_registry, check_obs_units
-
 
 def get_fps_data(fp_dict: dict)->dict:
     """
@@ -264,7 +262,7 @@ def get_mf_obs(obs_dict: dict,
 
 
             # Check units and convert to mol/mol if in ppm 
-            site_data = check_obs_units(site_data)
+            # site_data = check_obs_units(site_data)
 
             # Add data to output dictionary
             mf_obs_out_dict[site] = site_data
@@ -361,33 +359,33 @@ def get_mf_obs_sims(flux_dict: dict,
             List of averaging periods for sites that have available
             data over period of interest
     -------------------------------------------------------
-    """ 
+    """
     data_dict = {}
     sites = fp_dict["site"]
-    
+
     # Get CO2 flux fields
     data_dict[".flux"] =  get_flux_data(flux_dict)
-    
-    # Get CO2 boundary conditions        
+
+    # Get CO2 boundary conditions
     if use_bc is True:
         data_dict[".bc"] = get_mf_bc_data(bc_dict)
     else:
         data_dict[".bc"] = None
-    
+
     # Get dataset source entry (if exists, used for verification games)
     if "dataset_source" in obs_dict.keys():
         dataset_source = obs_dict["dataset_source"]
     else:
         dataset_source = None
-        
-    # Get mole fraction observations 
-    obs_mf_dict = get_mf_obs(obs_dict, 
+
+    # Get mole fraction observations
+    obs_mf_dict = get_mf_obs(obs_dict,
                              dataset_source=dataset_source,
                             )
-    
+
     # Get footprint datasets
     fp_data_dict = get_fps_data(fp_dict)
-   
+
     site_indices_to_keep = []
     for i, site in enumerate(sites):
         if (site in obs_mf_dict.keys()) and (site in fp_data_dict.keys()):
@@ -421,7 +419,7 @@ def get_mf_obs_sims(flux_dict: dict,
 
                 data_dict[site] = scenario_combined
                 # data_dict[site].bc_mod.values *= 1e-3 # convert from ppb (default in openghg) to ppm
-                data_dict[site].bc_mod.values *= 1e-9 # convert from ppb (default in openghg) to mol/mol
+                # data_dict[site].bc_mod.values *= 1e-9 # convert from ppb (default in openghg) to mol/mol
                 site_indices_to_keep.append(site_ind)
 
             except SearchError:
