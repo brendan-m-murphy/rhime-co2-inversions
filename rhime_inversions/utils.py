@@ -1,8 +1,6 @@
-# utils.py 
+# utils.py
 
 import os
-import re
-import sys
 import glob
 import json
 import numpy as np
@@ -11,14 +9,9 @@ import xarray as xr
 import dask.array as da
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Optional, Union
 
-from openghg.analyse import ModelScenario
 from openghg.analyse import combine_datasets as openghg_combine_datasets
 
-from . import convert
-from . import calculate_basis_functions as cbf
-from importlib import reload
 
 def open_ds(path, chunks=None, combine=None):
     """
@@ -98,6 +91,7 @@ def read_netcdfs(files, dim="time", chunks=None, verbose=True):
 
     return combined
 
+
 def indexesMatch(dsa, dsb):
     """
     Check if two datasets need to be reindexed_like for combine_datasets
@@ -141,6 +135,7 @@ def indexesMatch(dsa, dsb):
 
     return True
 
+
 def combine_datasets(
     dataset_a: xr.Dataset,
     dataset_b: xr.Dataset,
@@ -166,6 +161,7 @@ def combine_datasets(
         xarray.Dataset: Combined dataset indexed to dataset_a
     """
     return openghg_combine_datasets(dataset_a, dataset_b.load(), method=method, tolerance=tolerance)
+
 
 # def combine_datasets(dsa, dsb, method="ffill", tolerance=None):
 #     """
@@ -233,7 +229,9 @@ def synonyms(search_string, info, alternative_label="alt"):
     # If not found, search synonyms
     if len(out_strings) == 0:
         for k in keys:
-            matched_strings = [s for s in info[k][alternative_label] if s.upper() == search_string.upper()]
+            matched_strings = [
+                s for s in info[k][alternative_label] if s.upper() == search_string.upper()
+            ]
             if len(matched_strings) != 0:
                 out_strings = [k]
                 break
@@ -244,6 +242,7 @@ def synonyms(search_string, info, alternative_label="alt"):
         out_string = None
 
     return out_string
+
 
 def load_json(filename):
     """Load a JSON file from the internal data directory.
@@ -257,6 +256,7 @@ def load_json(filename):
     data_folder = Path("/user/home/wz22079/my_openghg/supplementary_data/openghg_defs/data")
     filepath = data_folder.joinpath(filename)
     return json.loads(filepath.read_text())
+
 
 def filtering(datasets_in, filters, keep_missing=False):
     """
@@ -327,7 +327,9 @@ def filtering(datasets_in, filters, keep_missing=False):
             if np.any(wh_rlon[0]) and np.any(wh_rlat[0]):
                 local_sum[ti] = np.sum(
                     dataset.fp[
-                        wh_rlat[0][0] - 2 : wh_rlat[0][0] + 3, wh_rlon[0][0] - 2 : wh_rlon[0][0] + 3, ti
+                        wh_rlat[0][0] - 2 : wh_rlat[0][0] + 3,
+                        wh_rlon[0][0] - 2 : wh_rlon[0][0] + 3,
+                        ti,
                     ].values
                 ) / np.sum(dataset.fp[:, :, ti].values)
             else:
@@ -432,7 +434,9 @@ def filtering(datasets_in, filters, keep_missing=False):
         """
 
         ti = [
-            i for i, pblh in enumerate(dataset.PBLH) if np.abs(float(dataset.inlet_height_magl) - pblh) > 50.0
+            i
+            for i, pblh in enumerate(dataset.PBLH)
+            if np.abs(float(dataset.inlet_height_magl) - pblh) > 50.0
         ]
 
         if len(ti) != 0:
@@ -443,7 +447,8 @@ def filtering(datasets_in, filters, keep_missing=False):
                 dataarray_temp = mf_data_array[dict(time=ti)]
 
                 mf_ds = xr.Dataset(
-                    {"mf": (["time"], dataarray_temp)}, coords={"time": (dataarray_temp.coords["time"])}
+                    {"mf": (["time"], dataarray_temp)},
+                    coords={"time": (dataarray_temp.coords["time"])},
                 )
 
                 dataset_out = combine_datasets(dataset_temp, mf_ds, method=None)
@@ -452,17 +457,20 @@ def filtering(datasets_in, filters, keep_missing=False):
                 return dataset[dict(time=ti)]
 
         else:
-            print("PBLH filtering removed all datapoints so this filter is not applied to this site.")
+            print(
+                "PBLH filtering removed all datapoints so this filter is not applied to this site."
+            )
 
-    filtering_functions = {"daily_median": daily_median,        
-                           "daytime": daytime,
-                           "daytime9to5": daytime9to5,
-                           "nighttime": nighttime,
-                           "noon": noon,
-                           "local_influence": local_influence,
-                           "six_hr_mean": six_hr_mean,
-                           "pblh": pblh,
-                          }
+    filtering_functions = {
+        "daily_median": daily_median,
+        "daytime": daytime,
+        "daytime9to5": daytime9to5,
+        "nighttime": nighttime,
+        "noon": noon,
+        "local_influence": local_influence,
+        "six_hr_mean": six_hr_mean,
+        "pblh": pblh,
+    }
 
     # Get list of sites
     sites = [key for key in list(datasets.keys()) if key[0] != "."]
@@ -472,9 +480,13 @@ def filtering(datasets_in, filters, keep_missing=False):
         for filt in filters:
             n_nofilter = datasets[site].time.values.shape[0]
             if filt in ["daily_median", "six_hr_mean", "pblh"]:
-                datasets[site] = filtering_functions[filt](datasets[site], keep_missing=keep_missing)
+                datasets[site] = filtering_functions[filt](
+                    datasets[site], keep_missing=keep_missing
+                )
             else:
-                datasets[site] = filtering_functions[filt](datasets[site], site, keep_missing=keep_missing)
+                datasets[site] = filtering_functions[filt](
+                    datasets[site], site, keep_missing=keep_missing
+                )
             n_filter = datasets[site].time.values.shape[0]
             n_dropped = n_nofilter - n_filter
             perc_dropped = np.round(n_dropped / n_nofilter * 100, 2)
@@ -483,17 +495,18 @@ def filtering(datasets_in, filters, keep_missing=False):
     return datasets
 
 
-def timeseries_HiTRes(flux_dict,
-                      fp_HiTRes_ds=None,
-                      fp_file=None,
-                      output_TS=True,
-                      output_fpXflux=True,
-                      output_type="Dataset",
-                      output_file=None,
-                      verbose=False,
-                      chunks=None,
-                      time_resolution="1H",
-                     ):
+def timeseries_HiTRes(
+    flux_dict,
+    fp_HiTRes_ds=None,
+    fp_file=None,
+    output_TS=True,
+    output_fpXflux=True,
+    output_type="Dataset",
+    output_file=None,
+    verbose=False,
+    chunks=None,
+    time_resolution="1H",
+):
     """
     The timeseries_HiTRes function computes flux * HiTRes footprints.
 
@@ -547,18 +560,21 @@ def timeseries_HiTRes(flux_dict,
     -----------------------------------
     """
     if verbose:
-        print(f"\nCalculating timeseries with {time_resolution} resolution, this might take a few minutes")
-        
+        print(
+            f"\nCalculating timeseries with {time_resolution} resolution, this might take a few minutes"
+        )
+
     # Retrieve HiTRes footprint
     if fp_HiTRes_ds is None and fp_file is None:
-        raise("Must provide either a footprint Dataset or footprint filename")
-        
+        raise ("Must provide either a footprint Dataset or footprint filename")
+
     elif fp_HiTRes_ds is None:
-        fp_HiTRes_ds = read_netcdfs(fp_file, 
-                                    chunks=chunks,
-                                   )
+        fp_HiTRes_ds = read_netcdfs(
+            fp_file,
+            chunks=chunks,
+        )
         fp_HiTRes = fp_HiTRes_ds.fp_HiTRes
-        
+
     else:
         if isinstance(fp_HiTRes_ds, xr.DataArray):
             fp_HiTRes = fp_HiTRes_ds
@@ -583,9 +599,7 @@ def timeseries_HiTRes(flux_dict,
     H_resample = (
         int(time_resolution[0])
         if H_back_hour_diff == 1
-        else 1
-        if H_back_hour_diff == int(time_resolution[0])
-        else None
+        else 1 if H_back_hour_diff == int(time_resolution[0]) else None
     )
     if H_resample is None:
         print("Cannot resample H_back")
@@ -600,18 +614,26 @@ def timeseries_HiTRes(flux_dict,
         else flux_dict
     )
     flux = {
-        sector: {freq: None if flux_freq is None else flux_freq for freq, flux_freq in flux_sector.items()}
+        sector: {
+            freq: None if flux_freq is None else flux_freq
+            for freq, flux_freq in flux_sector.items()
+        }
         for sector, flux_sector in flux.items()
     }
 
     # extract the required time data
     flux = {
         sector: {
-            freq: flux_freq.sel(
-                time=slice(fp_HiTRes_ds.time[0] - np.timedelta64(max_H_back, "h"), fp_HiTRes_ds.time[-1])
-            ).flux
-            if flux_freq is not None
-            else None
+            freq: (
+                flux_freq.sel(
+                    time=slice(
+                        fp_HiTRes_ds.time[0] - np.timedelta64(max_H_back, "h"),
+                        fp_HiTRes_ds.time[-1],
+                    )
+                ).flux
+                if flux_freq is not None
+                else None
+            )
             for freq, flux_freq in flux_sector.items()
         }
         for sector, flux_sector in flux.items()
@@ -622,11 +644,14 @@ def timeseries_HiTRes(flux_dict,
             # reindex the high frequency data to match the fp
             time_flux = np.arange(
                 fp_HiTRes_ds.time[0].values - np.timedelta64(max_H_back, "h"),
-                fp_HiTRes_ds.time[-1].values + np.timedelta64(time_resolution[0], time_resolution[1].lower()),
+                fp_HiTRes_ds.time[-1].values
+                + np.timedelta64(time_resolution[0], time_resolution[1].lower()),
                 time_resolution[0],
                 dtype=f"datetime64[{time_resolution[1].lower()}]",
             )
-            flux_sector["high_freq"] = flux_sector["high_freq"].reindex(time=time_flux, method="ffill")
+            flux_sector["high_freq"] = flux_sector["high_freq"].reindex(
+                time=time_flux, method="ffill"
+            )
         else:
             print(
                 f"\nWarning: no high frequency flux data for {sector}, estimating a timeseries using the low frequency data"
@@ -634,17 +659,19 @@ def timeseries_HiTRes(flux_dict,
             flux_sector["high_freq"] = None
 
         if "low_freq" not in flux_sector.keys() or flux_sector["low_freq"] is None:
-            print(f"\nWarning: no low frequency flux data for {sector}, resampling from high frequency data")
+            print(
+                f"\nWarning: no low frequency flux data for {sector}, resampling from high frequency data"
+            )
             flux_sector["low_freq"] = flux_sector["high_freq"].resample(time="MS").mean()
 
     # convert to array to use in numba loop
     flux = {
         sector: {
-            freq: None
-            if flux_freq is None
-            else flux_freq.values
-            if flux_freq.chunks is None
-            else da.array(flux_freq)
+            freq: (
+                None
+                if flux_freq is None
+                else flux_freq.values if flux_freq.chunks is None else da.array(flux_freq)
+            )
             for freq, flux_freq in flux_sector.items()
         }
         for sector, flux_sector in flux.items()
@@ -661,7 +688,10 @@ def timeseries_HiTRes(flux_dict,
         timeseries = {sector: da.zeros(len(time_array)) for sector in flux.keys()}
 
     # month and year of the start of the data - used to index the low res data
-    start = {dd: getattr(np.datetime64(time_array[0], "h").astype(object), dd) for dd in ["month", "year"]}
+    start = {
+        dd: getattr(np.datetime64(time_array[0], "h").astype(object), dd)
+        for dd in ["month", "year"]
+    }
 
     # put the time array into tqdm if we want a progress bar to show throughout the loop
     iters = tqdm(time_array) if verbose else time_array
@@ -674,16 +704,20 @@ def timeseries_HiTRes(flux_dict,
 
         # get the correct index for the low res data
         # estimated using the difference between the current and start month and year
-        current = {dd: getattr(np.datetime64(time, "h").astype(object), dd) for dd in ["month", "year"]}
+        current = {
+            dd: getattr(np.datetime64(time, "h").astype(object), dd) for dd in ["month", "year"]
+        }
         tt_low = current["month"] - start["month"] + 12 * (current["year"] - start["year"])
 
         # select the high res emissions for the corresponding 24 hours
         # if there aren't any high frequency data it will select from the low frequency data
         # this is so that we can compare emissions data with different resolutions e.g. ocean species
         emissions = {
-            sector: flux_sector["high_freq"][:, :, tt : tt + fp_time.shape[2] - 1]
-            if flux_sector["high_freq"] is not None
-            else flux_sector["low_freq"][:, :, tt_low]
+            sector: (
+                flux_sector["high_freq"][:, :, tt : tt + fp_time.shape[2] - 1]
+                if flux_sector["high_freq"] is not None
+                else flux_sector["low_freq"][:, :, tt_low]
+            )
             for sector, flux_sector in flux.items()
         }
         # add an axis if the emissions is array is 2D so that it can be multiplied by the fp
@@ -702,10 +736,13 @@ def timeseries_HiTRes(flux_dict,
         # --> mol/mol/mol/m2/s * mol/m2/s === mol / mol
         fpXflux_time = {sector: em_sec * fp_time[:, :, 1:] for sector, em_sec in emissions.items()}
         # multiply the monthly flux by the residual fp, at H_back==24
-        fpXflux_end = {sector: em_end * fp_time[:, :, 0] for sector, em_end in emissions_end.items()}
+        fpXflux_end = {
+            sector: em_end * fp_time[:, :, 0] for sector, em_end in emissions_end.items()
+        }
         # append the residual emissions
         fpXflux_time = {
-            sector: np.dstack((fp_fl, fpXflux_end[sector])) for sector, fp_fl in fpXflux_time.items()
+            sector: np.dstack((fp_fl, fpXflux_end[sector]))
+            for sector, fp_fl in fpXflux_time.items()
         }
 
         for sector, fp_fl in fpXflux_time.items():
@@ -731,29 +768,37 @@ def timeseries_HiTRes(flux_dict,
         fpXflux = (
             xr.Dataset(
                 fpXflux,
-                coords={"lat": fp_HiTRes_ds.lat.values, "lon": fp_HiTRes_ds.lon.values, "time": time_array},
+                coords={
+                    "lat": fp_HiTRes_ds.lat.values,
+                    "lon": fp_HiTRes_ds.lon.values,
+                    "time": time_array,
+                },
             )
             if output_type.lower() == "dataset"
-            else {
-                sector: xr.DataArray(
-                    data=fpXflux_sector,
-                    dims=["lat", "lon", "time"],
-                    coords={
-                        "lat": fp_HiTRes_ds.lat.values,
-                        "lon": fp_HiTRes_ds.lon.values,
-                        "time": time_array,
-                    },
-                )
-                for sector, fpXflux_sector in fpXflux.items()
-            }
-            if output_type.lower() == "dataarray"
-            else fpXflux
+            else (
+                {
+                    sector: xr.DataArray(
+                        data=fpXflux_sector,
+                        dims=["lat", "lon", "time"],
+                        coords={
+                            "lat": fp_HiTRes_ds.lat.values,
+                            "lon": fp_HiTRes_ds.lon.values,
+                            "time": time_array,
+                        },
+                    )
+                    for sector, fpXflux_sector in fpXflux.items()
+                }
+                if output_type.lower() == "dataarray"
+                else fpXflux
+            )
         )
 
         if output_type.lower() == "dataset":
             fpXflux = fpXflux if fpXflux.chunks is None else fpXflux.compute()
         else:
-            fpXflux = {sec: ff if ff.chunks is None else ff.compute() for sec, ff in fpXflux.items()}
+            fpXflux = {
+                sec: ff if ff.chunks is None else ff.compute() for sec, ff in fpXflux.items()
+            }
 
         if output_type.lower() == "dataarray" and list(flux.keys()) == ["total"]:
             fpXflux = fpXflux["total"]
@@ -772,18 +817,22 @@ def timeseries_HiTRes(flux_dict,
         timeseries = (
             xr.Dataset(timeseries, coords={"time": time_array})
             if output_type.lower() == "dataset"
-            else {
-                sector: xr.DataArray(data=ts_sector, dims=["time"], coords={"time": time_array})
-                for sector, ts_sector in timeseries.items()
-            }
-            if output_type.lower() == "dataarray"
-            else timeseries
+            else (
+                {
+                    sector: xr.DataArray(data=ts_sector, dims=["time"], coords={"time": time_array})
+                    for sector, ts_sector in timeseries.items()
+                }
+                if output_type.lower() == "dataarray"
+                else timeseries
+            )
         )
 
         if output_type.lower() == "dataset":
             timeseries = timeseries if timeseries.chunks is None else timeseries.compute()
         else:
-            timeseries = {sec: tt if tt.chunks is None else tt.compute() for sec, tt in timeseries.items()}
+            timeseries = {
+                sec: tt if tt.chunks is None else tt.compute() for sec, tt in timeseries.items()
+            }
 
         if output_type.lower() == "dataarray" and list(flux.keys()) == ["total"]:
             timeseries = timeseries["total"]
@@ -792,318 +841,13 @@ def timeseries_HiTRes(flux_dict,
             print(f"Saving to {output_file}")
             timeseries.to_netcdf(output_file)
         elif output_file is not None:
-            print(f"output type must be dataset to save to file")
+            print("output type must be dataset to save to file")
 
         if output_fpXflux:
             return timeseries, fpXflux
         elif output_TS:
             return timeseries
 
-
-
-# def fp_sensitivity(data_dict: dict, 
-#                    domain: str, 
-#                    basis_case: str, 
-#                    basis_directory=None, 
-#                    verbose=True
-#                   ):
-#     """
-#     The fp_sensitivity function adds a sensitivity matrix, H, to each
-#     site xarray dataframe in fp_and_data.
-#     Basis function data in an array: lat, lon, no. regions.
-#     In each 'region'element of array there is a lat-lon grid with 1 in
-#     region and 0 outside region.
-
-#     Region numbering must start from 1
-#     -----------------------------------
-#     Args:
-#       data_dict (dict):
-#         Output from footprints_data_merge() function. Dictionary of datasets.
-#       domain (str):
-#         Domain name. The footprint files should be sub-categorised by the domain.
-#       basis_case:
-#         Basis case to read in. Examples of basis cases are "NESW","stratgrad".
-#         String if only one basis case is required. Dict if there are multiple
-#         sources that require separate basis cases. In which case, keys in dict should
-#         reflect keys in emissions_name dict used in fp_data_merge.
-#       basis_directory (str):
-#         basis_directory can be specified if files are not in the default
-#         directory. Must point to a directory which contains subfolders organized
-#         by domain. (optional)
-
-#     Returns:
-#         dict (xarray.Dataset):
-#           Same format as fp_and_data with sensitivity matrix and basis function grid added.
-#     -----------------------------------
-#     """
-#     import calculate_basis_functions as cbf 
-    
-#     # List of sites
-#     sites = [key for key in list(data_dict.keys()) if key[0] != "."]
-
-#     # List of flux sectors
-#     flux_sources = list(data_dict[".flux"].keys())
-
-#     # Reads in fp basis function: array w/ dim[sector, lat, lon, time]
-#     basis_func = cbf.basis(domain=domain,
-#                            basis_case=basis_case,
-#                            basis_directory=basis_directory
-#                           )
-        
-#     if "sector" not in basis_func.coords:
-#         print(("No sector info in basis function file, so assuming single basis grid "+
-#                "applies to all sectors"))
-        
-#         for i, source in enumerate(flux_sources):
-#             if i == 0:
-#                 basis_func_new = np.expand_dims(basis_func["basis"].astype(float), axis=0)
-#             else:
-#                 basis_func_new = np.concatenate((basis_func_new,
-#                                                  np.expand_dims(basis_func["basis"].astype(float),axis=0)),
-#                                                 axis=0)
-
-#         basis_func["basis"] = xr.DataArray(data=basis_func_new,
-#                                            dims=["sector", "lat", "lon", "time"],
-#                                            coords={"sector": flux_sources,
-#                                                    "lat": basis_func.lat.values,
-#                                                    "lon": basis_func.lon.values,
-#                                                    "time": basis_func.time.values})
-
-#     for site in sites:
-#         for si, source in enumerate(flux_sources):
-#             if source in basis_func["sector"].values:
-#                 source_ind = np.where(basis_func["sector"].values == source)[0]
-#                 basis_func_source = basis_func["basis"][source_ind][0]
-#             else:
-#                 print(f"Using %s as the basis case for {source}" %basis_func["sector"].values[0])
-#                 basis_func_source = basis_func["basis"][0]
-
-            
-#             if "fp_HiTRes" in list(data_dict[site].keys()): 
-#                 site_bf = xr.Dataset({"fp_HiTRes": data_dict[site]["fp_HiTRes"],
-#                                       "fp": data_dict[site]["fp"]})
-#             else:
-#                 site_bf = xr.Dataset({"fp": data_dict[site]["fp"]})
-                
-
-#             if len(flux_sources) == 1:
-#                 H_all_si = data_dict[site]["Hall"]
-#             elif len(flux_sources) > 1:
-#                 H_all_si = data_dict[site][f"Hall_{source}"]
-
-#             H_all_v = H_all_si.values.reshape((len(site_bf.lat) * len(site_bf.lon), len(site_bf.time)))
-
-#             if "region" in list(basis_func.dims.keys()):
-#                 if "time" in basis_func.basis.dims:
-#                     basis_func = basis_func.isel(time=0)
-
-#                 site_bf = xr.merge([site_bf, basis_func_source])
-
-#                 H = np.zeros((len(site_bf.region), len(site_bf.time)))
-#                 base_v = site_bf.basis.values.reshape((len(site_bf.lat) * len(site_bf.lon), len(site_bf.region)))
-
-#                 for i in range(len(site_bf.region)):
-#                     H[i, :] = np.nansum(H_all_v * base_v[:, i, np.newaxis], axis=0)
-                    
-#                 if source == "all":
-#                     if (sys.version_info < (3, 0)):
-#                         region_name = site_bf.region
-#                     else:
-#                         region_name = site_bf.region.decode("ascii")
-#                 else:
-#                     if (sys.version_info < (3, 0)):
-#                         region_name = [source + "-" + reg for reg in site_bf.region.values]
-#                     else:
-#                         region_name = [source + "-" + reg.decode("ascii") for reg in site_bf.region.values]
-
-#                 sensitivity = xr.DataArray(H,
-#                                            coords=[("region", region_name),
-#                                                    ("time", data_dict[site].coords["time"])])
-
-#             else:
-#                 print("Warning: Using basis functions without a region dimension may be deprecated shortly.")
-
-#                 site_bf = combine_datasets(site_bf, basis_func_source, method="nearest")
-
-#                 H = np.zeros((int(np.max(site_bf.basis)), len(site_bf.time)))
-#                 Herr = np.zeros((int(np.max(site_bf.basis)), len(site_bf.time)))
-
-#                 basis_scale = xr.Dataset({"basis_scale": (["lat", "lon", "time"], np.zeros(np.shape(site_bf.basis)))},
-#                                          coords = site_bf.coords)
-#                 site_bf = site_bf.merge(basis_scale)
-
-#                 base_v = np.ravel(site_bf.basis.values[:, : ,0])
-#                 for i in range(int(np.max(site_bf.basis))):
-#                     wh_ri = np.where(base_v == i + 1)
-#                     H[i, :] = np.nansum(H_all_v[wh_ri[0], :], axis=0)
-                    
-#                     coeff_var = np.nanstd(H_all_v[wh_ri[0], :], axis=0)/np.nanmean(H_all_v[wh_ri[0], :], axis=0)
-#                     Herr[i, :] = coeff_var
-
-#                 if source == "all":
-#                     region_name = list(range(1, np.max(site_bf.basis.values) + 1))
-#                 else:
-#                     region_name = [source + "-" + str(reg) for reg in range(1, int(np.max(site_bf.basis.values) + 1))]
-
-#                 sens_coords = {"region": (["region"], region_name),
-#                                "time": (["time"], data_dict[site].coords["time"].data),
-#                               }
-                
-#                 # sensitivity = xr.DataArray(H, coords=[("region", region_name), ("time", data_dict[site].coords["time"].data)])
-#                 # sensitivity_err = xr.DataArray(Herr, coords=[("region", region_name), ("time", data_dict[site].coords["time"].data)])                
-#                 sensitivity = xr.DataArray(H, coords=sens_coords)
-#                 sensitivity_err = xr.DataArray(Herr, coords=sens_coords)                
-
-
-#             if si == 0:
-#                 concat_sensitivity = sensitivity
-#                 concat_sensitivity_err = sensitivity_err
-#             else:
-#                 concat_sensitivity = xr.concat((concat_sensitivity, sensitivity), dim="region")
-#                 concat_sensitivity_err = xr.concat((concat_sensitivity_err, sensitivity_err), dim="region")
-
-#             sub_basis_cases = 0
-#             if source in basis_func["sector"].values:
-#                 source_ind = np.where(basis_func["sector"].values == source)[0]
-#                 basis_case_key = basis_func["sector"][source_ind]
-                    
-#             elif "all" in basis_case.keys():
-#                 source_ind = 0
-#                 basis_case_key = "all"
-
-#         data_dict[site]["H"] = np.abs(np.nan_to_num(concat_sensitivity))
-#         data_dict[site]["Herr"] = concat_sensitivity_err
-#         data_dict[".basis"] = basis_func["basis"]
-
-#     return data_dict
-
-
-# def bc_sensitivity(data_dict, domain, basis_case, bc_basis_directory=None):
-#     """
-#     The bc_sensitivity adds H_bc to the sensitivity matrix,
-#     to each site xarray dataframe in fp_and_data.
-#     -----------------------------------
-#     Args:
-#       data_dict (dict):
-#         Output from ModelScenario.footprints_data_merge() function. Dictionary of datasets.
-#      domain (str):
-#        Domain name. The footprint files should be sub-categorised by the domain.
-#      basis_case (str):
-#        Basis case to read in. Examples of basis cases are "NESW","stratgrad".
-#      bc_basis_directory (str):
-#        bc_basis_directory can be specified if files are not in the default
-#        directory. Must point to a directory which contains subfolders organized
-#        by domain. (optional)
-
-#     Returns:
-#       dict (xarray.Dataset):
-#         Same format as fp_and_data with sensitivity matrix added.
-#     -----------------------------------
-#     """ 
-#     sites = [key for key in list(data_dict.keys()) if key[0] != "."]
-
-#     basis_func = cbf.basis_boundary_conditions(domain=domain, 
-#                                                basis_case=basis_case, 
-#                                                bc_basis_directory=bc_basis_directory
-#                                               )
-#     # sort basis_func into time order
-#     ind = basis_func.time.argsort()
-#     timenew = basis_func.time[ind]
-#     basis_func = basis_func.reindex({"time": timenew})
-
-#     species_info = load_json(filename="species_info.json")
-
-#     species = data_dict[sites[0]].attrs["species"]
-#     species = synonyms(species, species_info)
-
-#     for site in sites:
-#         # ES commented out line below as .bc not attribute. Also assume openghg adds all relevant particle data to file.
-#         #        if fp_and_data[site].bc.chunks is not None:
-#         for particles in [
-#             "particle_locations_n",
-#             "particle_locations_e",
-#             "particle_locations_s",
-#             "particle_locations_w",
-#         ]:
-#             data_dict[site][particles] = data_dict[site][particles].compute()
-
-#         # compute any chemical loss to the BCs, use lifetime or else set loss to 1 (no loss)
-#         if "lifetime" in species_info[species].keys():
-#             lifetime = species_info[species]["lifetime"]
-#             lifetime_hrs_list_or_float = convert.convert_to_hours(lifetime)
-
-#             # calculate the lifetime_hrs associated with each time point in fp_and_data
-#             # this is because lifetime can be a list of monthly values
-
-#             time_month = data_dict[site].time.dt.month
-#             if type(lifetime_hrs_list_or_float) is list:
-#                 lifetime_hrs = [lifetime_hrs_list_or_float[item - 1] for item in time_month.values]
-#             else:
-#                 lifetime_hrs = lifetime_hrs_list_or_float
-
-#             loss_n = np.exp(-1 * data_dict[site].mean_age_particles_n / lifetime_hrs).rename("loss_n")
-#             loss_e = np.exp(-1 * data_dict[site].mean_age_particles_e / lifetime_hrs).rename("loss_e")
-#             loss_s = np.exp(-1 * data_dict[site].mean_age_particles_s / lifetime_hrs).rename("loss_s")
-#             loss_w = np.exp(-1 * data_dict[site].mean_age_particles_w / lifetime_hrs).rename("loss_w")
-#         else:
-#             loss_n = data_dict[site].particle_locations_n.copy()
-#             loss_e = data_dict[site].particle_locations_e.copy()
-#             loss_s = data_dict[site].particle_locations_s.copy()
-#             loss_w = data_dict[site].particle_locations_w.copy()
-#             loss_n[:] = 1
-#             loss_e[:] = 1
-#             loss_s[:] = 1
-#             loss_w[:] = 1
-
-#         DS_particle_loc = xr.Dataset(
-#             {
-#                 "particle_locations_n": data_dict[site]["particle_locations_n"],
-#                 "particle_locations_e": data_dict[site]["particle_locations_e"],
-#                 "particle_locations_s": data_dict[site]["particle_locations_s"],
-#                 "particle_locations_w": data_dict[site]["particle_locations_w"],
-#                 "loss_n": loss_n,
-#                 "loss_e": loss_e,
-#                 "loss_s": loss_s,
-#                 "loss_w": loss_w,
-#             }
-#         )
-#         #                                 "bc":fp_and_data[site]["bc"]})
-
-#         DS_temp = combine_datasets(DS_particle_loc, data_dict[".bc"].data, method="ffill")
-
-#         DS = combine_datasets(DS_temp, basis_func, method="ffill")
-
-#         DS = DS.transpose("height", "lat", "lon", "region", "time")
-
-#         part_loc = np.hstack(
-#             [
-#                 DS.particle_locations_n,
-#                 DS.particle_locations_e,
-#                 DS.particle_locations_s,
-#                 DS.particle_locations_w,
-#             ]
-#         )
-
-#         loss = np.hstack([DS.loss_n, DS.loss_e, DS.loss_s, DS.loss_w])
-
-#         vmr_ed = np.hstack([DS.vmr_n, DS.vmr_e, DS.vmr_s, DS.vmr_w])
-
-#         bf = np.hstack([DS.bc_basis_n, DS.bc_basis_e, DS.bc_basis_s, DS.bc_basis_w])
-
-#         H_bc = np.zeros((len(DS.coords["region"]), len(DS["particle_locations_n"]["time"])))
-
-#         for i in range(len(DS.coords["region"])):
-#             reg = bf[:, :, i, :]
-#             H_bc[i, :] = np.nansum((part_loc * loss * vmr_ed * reg), axis=(0, 1))
-
-#         sensitivity = xr.Dataset(
-#             {"H_bc": (["region_bc", "time"], H_bc)},
-#             coords={"region_bc": (DS.coords["region"].values), "time": (DS.coords["time"])},
-#         )
-
-#         data_dict[site] = data_dict[site].merge(sensitivity)
-
-#     return data_dict
 
 def areagrid(lat, lon):
     """
@@ -1144,6 +888,7 @@ def areagrid(lat, lon):
 
     return area
 
+
 def get_country(domain, country_file=None):
     if country_file is None:
         if not os.path.exists(os.path.join(openghginv_path, "countries/")):
@@ -1169,7 +914,9 @@ def get_country(domain, country_file=None):
         elif "region" in f.variables:
             country = f.variables["region"][:, :]
         else:
-            raise ValueError(f"Variables 'country' or 'region' not found in country file {filename}.")
+            raise ValueError(
+                f"Variables 'country' or 'region' not found in country file {filename}."
+            )
 
         #         if (ukmo is True) or (uk_split is True):
         #             name_temp = f.variables['name'][:]

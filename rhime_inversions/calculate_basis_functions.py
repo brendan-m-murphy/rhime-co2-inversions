@@ -15,10 +15,8 @@ import numpy as np
 import xarray as xr
 import pandas as pd
 
-from pathlib import Path
 from typing import Optional
 from collections import namedtuple
-from importlib import reload
 
 from .utils import read_netcdfs
 
@@ -841,7 +839,6 @@ def basis_functions_wrapper(
         outputpath (str):
             Path to save output
     """
-    import utils
     from sensitivity import fp_sensitivity, bc_sensitivity
 
     # Extract inputs from basis_dict

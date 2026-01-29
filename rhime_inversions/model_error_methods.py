@@ -9,7 +9,6 @@
 # ---------------------------------------------------------------------------------------
 
 import numpy as np 
-import xarray as xr
 
 def model_error_method_parser(data_dict: dict, 
                               method: str,

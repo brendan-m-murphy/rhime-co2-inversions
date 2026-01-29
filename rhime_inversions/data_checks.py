@@ -1,5 +1,4 @@
 import pint
-import numpy as np
 
 def create_unit_registry():
     """

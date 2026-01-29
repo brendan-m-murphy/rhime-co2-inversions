@@ -6,15 +6,8 @@
 # Functions for retrieving mole fraction datasets and creating simulations 
 # ---------------------------------------------------------------------------------------
 
-import os
-import sys
-import pint
-import glob
 import numpy as np
-import pandas as pd
-import xarray as xr
 import openghg
-import datetime as dt
 
 from openghg.types import SearchError
 from openghg.retrieve import get_flux, get_bc, get_obs_surface, get_footprint

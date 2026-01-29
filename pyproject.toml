@@ -22,6 +22,7 @@ dependencies = [
     "pytensor",
     "scipy",
     "openghg",
+    "ruff>=0.14.14",
 ]
 
 [project.optional-dependencies]

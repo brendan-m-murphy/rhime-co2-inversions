@@ -7,7 +7,6 @@
 # *****************************************************************************
 import os
 import re
-import sys
 import getpass
 import pymc as pm
 import arviz as az
@@ -18,7 +17,7 @@ import pytensor.tensor as pt
 
 from scipy import stats
 from pathlib import Path
-from typing import Optional, Union
+from typing import Optional
 
 from . import convert
 from . import utils
