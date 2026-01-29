@@ -252,9 +252,9 @@ def load_json(filename):
     Returns:
         dict
     """
-    # data_folder = Path(__file__).parent.joinpath("data")
-    data_folder = Path("/user/home/wz22079/my_openghg/supplementary_data/openghg_defs/data")
-    filepath = data_folder.joinpath(filename)
+    from openghg_defs import data_path
+
+    filepath = data_path.joinpath(filename)
     return json.loads(filepath.read_text())
 
 

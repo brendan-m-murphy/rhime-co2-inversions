@@ -23,6 +23,7 @@ dependencies = [
     "scipy",
     "openghg",
     "ruff>=0.14.14",
+    "openghg-defs>=0.0.3",
 ]
 
 [project.optional-dependencies]
