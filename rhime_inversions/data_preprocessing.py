@@ -313,11 +313,11 @@ def align_forward_sims(flux_dict, fp_dict, obs_dict, bc_dict, use_bc):
             print(f"\nNo obs data found for {site} \n")
             continue  # skip this site
         except AttributeError:
-            print(f"\nNo data found for {site} between {obs_dict["start_date"]} and {obs_dict["end_date"]}.\n")
+            print(f'\nNo data found for {site} between {obs_dict["start_date"]} and {obs_dict["end_date"]}.\n')
             continue  # skip this site
         else:
             if site_data is None:
-                print(f"\nNo data found for {site} between {obs_dict["start_date"]} and {obs_dict["end_date"]}.\n")
+                print(f'\nNo data found for {site} between {obs_dict["start_date"]} and {obs_dict["end_date"]}.\n')
                 continue  # skip this site
 
         try:
@@ -420,7 +420,3 @@ def get_model_params():
               }
 
     return obs_dict, flux_dict, fp_dict, bc_dict
-    
-
-
-    

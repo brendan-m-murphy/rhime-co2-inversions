@@ -1,34 +1,36 @@
 # ---------------------------------------------------------------------------------------
 # model_error_methods.py
-# Created 25 Sept. 2024 
-# Author: Eric Saboya, School of Geographical Sciences, University of Bristol 
+# Created 25 Sept. 2024
+# Author: Eric Saboya, School of Geographical Sciences, University of Bristol
 # ---------------------------------------------------------------------------------------
-# Methods for calculating model errors 
+# Methods for calculating model errors
 # > "residual"
 # > "percentile"
 # ---------------------------------------------------------------------------------------
 
-import numpy as np 
+import numpy as np
 
-def model_error_method_parser(data_dict: dict, 
-                              method: str,
-                             ):
+
+def model_error_method_parser(
+    data_dict: dict,
+    method: str,
+):
     """
     Parser function for calculating model errors
 
     Args:
     data_dict (dict):
-        Output dictionary from basis fucntions 
+        Output dictionary from basis fucntions
     method (str):
-        Model error method of interest 
+        Model error method of interest
     """
     sites = []
     for key in data_dict.keys():
         if "." not in key:
-            sites.append(key)      
+            sites.append(key)
 
     if method == None:
-        data_dict = no_model_error(sites, data_dict)        
+        data_dict = no_model_error(sites, data_dict)
     elif method == "fixed":
         data_dict = fixed_method(sites, data_dict)
     elif method == "residual":
@@ -36,32 +38,41 @@ def model_error_method_parser(data_dict: dict,
     return data_dict
 
 
-def no_model_error(sites: list,
-                   data_dict: dict,
-                  ):
+def no_model_error(
+    sites: list,
+    data_dict: dict,
+):
     """
-    Model error of zero applied to data 
+    Model error of zero applied to data
     """
     for site in sites:
         y_epsilon_m = data_dict[site].mf * 0.0
         data_dict[site]["y_model_err"] = y_epsilon_m
     return data_dict
 
-def fixed_method(sites: list,
-                 data_dict: dict,
-                ):
+
+def fixed_method(
+    sites: list,
+    data_dict: dict,
+):
     """
-    Model error based on the mean obs-sim 
-    difference 
+    Model error based on the mean obs-sim
+    difference
     """
     for site in sites:
-        y_epsilon_m = np.abs(np.nanmean(fp_data[site].mf - fp_data[site].mf_mod_high_res - fp_data[site].bc_mod))
+        y_epsilon_m = np.abs(
+            np.nanmean(
+                data_dict[site].mf - data_dict[site].mf_mod_high_res - data_dict[site].bc_mod
+            )
+        )
         data_dict[site]["y_model_err"] = (data_dict[site].mf * 0.0) + y_epsilon_m
     return data_dict
 
-def residual_method(sites: list, 
-                    data_dict: dict,
-                   ):
+
+def residual_method(
+    sites: list,
+    data_dict: dict,
+):
     """
     This method is explained in "Modeling of Atmospheric Chemistry" by Brasseur
     and Jacobs in Box 11.2 on p.499-500, following "Comparative inverse analysis of satellitle (MOPITT)
@@ -107,10 +118,12 @@ def residual_method(sites: list,
         y = data_dict[site].mf
         y_mod = data_dict[site].bc_mod + data_dict[site].mf_mod_high_res
         # Observational error
-        y_epsilon_o = (y-y_mod) - np.nanmean(y-y_mod)
+        y_epsilon_o = (y - y_mod) - np.nanmean(y - y_mod)
         # Instrumental error
-        y_epsilon_i = np.sqrt(data_dict[site].mf_variability**2 + data_dict[site].mf_repeatability**2)
-        # Model error 
+        y_epsilon_i = np.sqrt(
+            data_dict[site].mf_variability ** 2 + data_dict[site].mf_repeatability ** 2
+        )
+        # Model error
         y_epsilon_m = np.sqrt(np.abs(y_epsilon_o**2 - y_epsilon_i**2))
         data_dict[site]["y_model_err"] = y_epsilon_m
     return data_dict

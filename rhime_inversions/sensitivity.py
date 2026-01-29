@@ -16,48 +16,46 @@ from . import calculate_basis_functions as cbf
 
 from .utils import combine_datasets, load_json, synonyms
 
-def fp_sensitivity(data_dict: dict, 
-                   domain: str, 
-                   basis_case: str, 
-                   basis_directory=None, 
-                   verbose=True
-                  )-> dict:
+
+def fp_sensitivity(
+    data_dict: dict, domain: str, basis_case: str, basis_directory=None, verbose=True
+) -> dict:
     """
     -------------------------------------------------------
-    The fp_sensitivity function adds a sensitivity matrix, 
+    The fp_sensitivity function adds a sensitivity matrix,
     H, to each site xarray dataframe in data_dict.
-    
+
     Basis function data is in an array: lat, lon, no. regions.
-    In each 'region'element of array there is a lat-lon grid 
+    In each 'region'element of array there is a lat-lon grid
     with 1 in region and 0 outside region.
 
     Region numbering must start from 1
     -------------------------------------------------------
     Args:
         data_dict (dict):
-            Output from get_mf_obs_sims() function. 
+            Output from get_mf_obs_sims() function.
             Dictionary of datasets.
-        
+
           domain (str):
             Model domain name (str)
-        
+
         basis_case (str, defaults to None):
-            Basis case to read in. Examples of basis cases are 
+            Basis case to read in. Examples of basis cases are
             "NESW","stratgrad".
-            String if only one basis case is required. 
+            String if only one basis case is required.
             Dict if there are multiple
-            sources that require separate basis cases. 
+            sources that require separate basis cases.
             n which case, keys in dict should
             reflect keys in emissions_name dict used in flux_dict.
-      
+
         basis_directory (str, defaults to None):
-            basis_directory can be specified if files are not 
-            in the default directory. Must point to a directory 
+            basis_directory can be specified if files are not
+            in the default directory. Must point to a directory
             which contains subfolders organized by domain.
 
     Returns:
         dict (xarray.Dataset):
-            Same format as data_dict with sensitivity matrix 
+            Same format as data_dict with sensitivity matrix
             and basis function grid added.
     -------------------------------------------------------
     """
@@ -68,29 +66,35 @@ def fp_sensitivity(data_dict: dict,
     flux_sources = list(data_dict[".flux"].keys())
 
     # Reads in fp basis function: array w/ dim[sector, lat, lon, time]
-    basis_func = cbf.basis(domain=domain,
-                           basis_case=basis_case,
-                           basis_directory=basis_directory
-                          )
-        
+    basis_func = cbf.basis(domain=domain, basis_case=basis_case, basis_directory=basis_directory)
+
     if "sector" not in basis_func.coords:
-        print(("No sector info in basis function file, so assuming single basis grid "+
-               "applies to all sectors"))
-        
+        print(
+            (
+                "No sector info in basis function file, so assuming single basis grid "
+                + "applies to all sectors"
+            )
+        )
+
         for i, source in enumerate(flux_sources):
             if i == 0:
                 basis_func_new = np.expand_dims(basis_func["basis"].astype(float), axis=0)
             else:
-                basis_func_new = np.concatenate((basis_func_new,
-                                                 np.expand_dims(basis_func["basis"].astype(float),axis=0)),
-                                                 axis=0)
+                basis_func_new = np.concatenate(
+                    (basis_func_new, np.expand_dims(basis_func["basis"].astype(float), axis=0)),
+                    axis=0,
+                )
 
-        basis_func["basis"] = xr.DataArray(data=basis_func_new,
-                                           dims=["sector", "lat", "lon", "time"],
-                                           coords={"sector": flux_sources,
-                                                   "lat": basis_func.lat.values,
-                                                   "lon": basis_func.lon.values,
-                                                   "time": basis_func.time.values})
+        basis_func["basis"] = xr.DataArray(
+            data=basis_func_new,
+            dims=["sector", "lat", "lon", "time"],
+            coords={
+                "sector": flux_sources,
+                "lat": basis_func.lat.values,
+                "lon": basis_func.lon.values,
+                "time": basis_func.time.values,
+            },
+        )
 
     for site in sites:
         for si, source in enumerate(flux_sources):
@@ -98,23 +102,24 @@ def fp_sensitivity(data_dict: dict,
                 source_ind = np.where(basis_func["sector"].values == source)[0]
                 basis_func_source = basis_func["basis"][source_ind][0]
             else:
-                print(f"Using %s as the basis case for {source}" %basis_func["sector"].values[0])
+                print(f"Using {basis_func['sector'].values[0]} as the basis case for {source}")
                 basis_func_source = basis_func["basis"][0]
 
-            
-            if "fp_HiTRes" in list(data_dict[site].keys()): 
-                site_bf = xr.Dataset({"fp_HiTRes": data_dict[site]["fp_HiTRes"],
-                                      "fp": data_dict[site]["fp"]})
+            if "fp_HiTRes" in list(data_dict[site].keys()):
+                site_bf = xr.Dataset(
+                    {"fp_HiTRes": data_dict[site]["fp_HiTRes"], "fp": data_dict[site]["fp"]}
+                )
             else:
                 site_bf = xr.Dataset({"fp": data_dict[site]["fp"]})
-                
 
             if len(flux_sources) == 1:
                 H_all_si = data_dict[site]["Hall"]
             elif len(flux_sources) > 1:
                 H_all_si = data_dict[site][f"Hall_{source}"]
 
-            H_all_v = H_all_si.values.reshape((len(site_bf.lat)*len(site_bf.lon), len(site_bf.time)))
+            H_all_v = H_all_si.values.reshape(
+                (len(site_bf.lat) * len(site_bf.lon), len(site_bf.time))
+            )
 
             if "region" in list(basis_func.dims.keys()):
                 if "time" in basis_func.basis.dims:
@@ -124,52 +129,60 @@ def fp_sensitivity(data_dict: dict,
 
                 H = np.zeros((len(site_bf.region), len(site_bf.time)))
                 Herr = np.zeros((len(site_bf.region), len(site_bf.time)))
-                
-                base_v = site_bf.basis.values.reshape((len(site_bf.lat) * len(site_bf.lon), len(site_bf.region)))
+
+                base_v = site_bf.basis.values.reshape(
+                    (len(site_bf.lat) * len(site_bf.lon), len(site_bf.region))
+                )
 
                 for i in range(len(site_bf.region)):
                     H[i, :] = np.nansum(H_all_v * base_v[:, i, np.newaxis], axis=0)
 
                     s_ln = np.nanstd(np.log(np.abs(H_all_v * base_v[:, i, np.newaxis])), axis=0)
-                    coeff_var_ln = np.sqrt(np.exp(s_ln**2)-1)
+                    coeff_var_ln = np.sqrt(np.exp(s_ln**2) - 1)
                     # coeff_var = np.nanstd(H_all_v * base_v[:, i, np.newaxis], axis=0)/np.nanmean(H_all_v * base_v[:, i, np.newaxis], axis=0)
-                    
+
                     Herr[i, :] = np.abs(np.nan_to_num(coeff_var_ln))
-                
+
                 if source == "all":
-                    if (sys.version_info < (3,0)):
+                    if sys.version_info < (3, 0):
                         region_name = site_bf.region
                     else:
                         region_name = site_bf.region.decode("ascii")
                 else:
-                    if (sys.version_info < (3,0)):
+                    if sys.version_info < (3, 0):
                         region_name = [source + "-" + reg for reg in site_bf.region.values]
                     else:
-                        region_name = [source + "-" + reg.decode("ascii") for reg in site_bf.region.values]
+                        region_name = [
+                            source + "-" + reg.decode("ascii") for reg in site_bf.region.values
+                        ]
 
                 sens_coords = [("region", region_name), ("time", data_dict[site].coords["time"])]
                 sensitivity = xr.DataArray(H, coords=sens_coords)
                 sensitivity_err = xr.DataArray(Herr, coords=sens_coords)
 
             else:
-                print("Warning: Using basis functions without a region dimension may be deprecated shortly.")
+                print(
+                    "Warning: Using basis functions without a region dimension may be deprecated shortly."
+                )
 
                 site_bf = combine_datasets(site_bf, basis_func_source, method="nearest")
 
                 H = np.zeros((int(np.max(site_bf.basis)), len(site_bf.time)))
                 Herr = np.zeros((int(np.max(site_bf.basis)), len(site_bf.time)))
 
-                basis_scale = xr.Dataset({"basis_scale": (["lat", "lon", "time"], np.zeros(np.shape(site_bf.basis)))},
-                                         coords = site_bf.coords)
+                basis_scale = xr.Dataset(
+                    {"basis_scale": (["lat", "lon", "time"], np.zeros(np.shape(site_bf.basis)))},
+                    coords=site_bf.coords,
+                )
                 site_bf = site_bf.merge(basis_scale)
 
-                base_v = np.ravel(site_bf.basis.values[:, : ,0])
+                base_v = np.ravel(site_bf.basis.values[:, :, 0])
                 for i in range(int(np.max(site_bf.basis))):
                     wh_ri = np.where(base_v == i + 1)
                     H[i, :] = np.nansum(H_all_v[wh_ri[0], :], axis=0)
 
                     s_ln = np.nanstd(np.log(np.abs(H_all_v[wh_ri[0], :])), axis=0)
-                    coeff_var_ln = np.sqrt(np.exp(s_ln**2)-1)
+                    coeff_var_ln = np.sqrt(np.exp(s_ln**2) - 1)
 
                     # coeff_var = np.nanstd(H_all_v[wh_ri[0], :], axis=0)/np.nanmean(H_all_v[wh_ri[0], :], axis=0)
                     Herr[i, :] = np.abs(np.nan_to_num(coeff_var_ln))
@@ -177,28 +190,33 @@ def fp_sensitivity(data_dict: dict,
                 if source == "all":
                     region_name = list(range(1, np.max(site_bf.basis.values) + 1))
                 else:
-                    region_name = [source + "-" + str(reg) for reg in range(1, int(np.max(site_bf.basis.values) + 1))]
+                    region_name = [
+                        source + "-" + str(reg)
+                        for reg in range(1, int(np.max(site_bf.basis.values) + 1))
+                    ]
 
-                sens_coords = {"region": (["region"], region_name),
-                               "time": (["time"], data_dict[site].coords["time"].data),
-                              }
+                sens_coords = {
+                    "region": (["region"], region_name),
+                    "time": (["time"], data_dict[site].coords["time"].data),
+                }
                 sens_dims = ["region", "time"]
                 sensitivity = xr.DataArray(H, coords=sens_coords, dims=sens_dims)
-                sensitivity_err = xr.DataArray(Herr, coords=sens_coords, dims=sens_dims)                
-
+                sensitivity_err = xr.DataArray(Herr, coords=sens_coords, dims=sens_dims)
 
             if si == 0:
                 concat_sensitivity = sensitivity
                 concat_sensitivity_err = sensitivity_err
             else:
                 concat_sensitivity = xr.concat((concat_sensitivity, sensitivity), dim="region")
-                concat_sensitivity_err = xr.concat((concat_sensitivity_err, sensitivity_err), dim="region")
+                concat_sensitivity_err = xr.concat(
+                    (concat_sensitivity_err, sensitivity_err), dim="region"
+                )
 
             sub_basis_cases = 0
             if source in basis_func["sector"].values:
                 source_ind = np.where(basis_func["sector"].values == source)[0]
                 basis_case_key = basis_func["sector"][source_ind]
-                    
+
             elif "all" in basis_case.keys():
                 source_ind = 0
                 basis_case_key = "all"
@@ -210,11 +228,12 @@ def fp_sensitivity(data_dict: dict,
     return data_dict
 
 
-def bc_sensitivity(data_dict, 
-                   domain, 
-                   basis_case, 
-                   bc_basis_directory=None,
-                  ):
+def bc_sensitivity(
+    data_dict,
+    domain,
+    basis_case,
+    bc_basis_directory=None,
+):
     """
     -------------------------------------------------------
     The bc_sensitivity adds H_bc to the sensitivity matrix,
@@ -222,34 +241,33 @@ def bc_sensitivity(data_dict,
     -------------------------------------------------------
     Args:
         data_dict (dict):
-            Output from get_mf_obs_sims() function. 
+            Output from get_mf_obs_sims() function.
             Dictionary of datasets.
-        
+
         domain (str):
             Model domain name (str)
-     
+
         basis_case (str):
-           Basis case to read in. 
+           Basis case to read in.
            Examples of basis cases are "NESW","stratgrad".
-       
+
         bc_basis_directory (str):
-           bc_basis_directory can be specified if files are 
-           not in the default directory. Must point to a 
+           bc_basis_directory can be specified if files are
+           not in the default directory. Must point to a
            directory which contains subfolders organized
            by domain. (optional)
 
     Returns:
       dict (xarray.Dataset):
-        Same format as data_dict with HBc 
+        Same format as data_dict with HBc
         sensitivity matrix added.
     -------------------------------------------------------
-    """ 
+    """
     sites = [key for key in list(data_dict.keys()) if key[0] != "."]
 
-    basis_func = cbf.basis_boundary_conditions(domain=domain, 
-                                               basis_case=basis_case, 
-                                               bc_basis_directory=bc_basis_directory
-                                              )
+    basis_func = cbf.basis_boundary_conditions(
+        domain=domain, basis_case=basis_case, bc_basis_directory=bc_basis_directory
+    )
     # sort basis_func into time order
     ind = basis_func.time.argsort()
     timenew = basis_func.time[ind]
@@ -285,11 +303,19 @@ def bc_sensitivity(data_dict,
             else:
                 lifetime_hrs = lifetime_hrs_list_or_float
 
-            loss_n = np.exp(-1 * data_dict[site].mean_age_particles_n/lifetime_hrs).rename("loss_n")
-            loss_e = np.exp(-1 * data_dict[site].mean_age_particles_e/lifetime_hrs).rename("loss_e")
-            loss_s = np.exp(-1 * data_dict[site].mean_age_particles_s/lifetime_hrs).rename("loss_s")
-            loss_w = np.exp(-1 * data_dict[site].mean_age_particles_w/lifetime_hrs).rename("loss_w")
-            
+            loss_n = np.exp(-1 * data_dict[site].mean_age_particles_n / lifetime_hrs).rename(
+                "loss_n"
+            )
+            loss_e = np.exp(-1 * data_dict[site].mean_age_particles_e / lifetime_hrs).rename(
+                "loss_e"
+            )
+            loss_s = np.exp(-1 * data_dict[site].mean_age_particles_s / lifetime_hrs).rename(
+                "loss_s"
+            )
+            loss_w = np.exp(-1 * data_dict[site].mean_age_particles_w / lifetime_hrs).rename(
+                "loss_w"
+            )
+
         else:
             loss_n = data_dict[site].particle_locations_n.copy()
             loss_e = data_dict[site].particle_locations_e.copy()

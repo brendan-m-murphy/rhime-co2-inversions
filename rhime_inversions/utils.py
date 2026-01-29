@@ -694,7 +694,12 @@ def timeseries_HiTRes(
     }
 
     # put the time array into tqdm if we want a progress bar to show throughout the loop
-    iters = tqdm(time_array) if verbose else time_array
+    if verbose:
+        from tqdm import tqdm
+
+        iters = tqdm(time_array)
+    else:
+        iters = time_array
     ### iterate through the time coord to get the total mf at each time step using the H back coord
     # at each release time we disaggregate the particles backwards over the previous 24hrs
     for tt, time in enumerate(iters):
@@ -891,16 +896,19 @@ def areagrid(lat, lon):
 
 def get_country(domain, country_file=None):
     if country_file is None:
-        if not os.path.exists(os.path.join(openghginv_path, "countries/")):
-            os.makedirs(os.path.join(openghginv_path, "countries/"))
-            raise FileNotFoundError(
-                "Country definition file not found." f" Please add to {openghginv_path}/countries/"
-            )
-        else:
-            country_directory = os.path.join(openghginv_path, "countries/")
+        # if not os.path.exists(os.path.join(openghginv_path, "countries/")):
+        #     os.makedirs(os.path.join(openghginv_path, "countries/"))
+        #     raise FileNotFoundError(
+        #         "Country definition file not found." f" Please add to {openghginv_path}/countries/"
+        #     )
+        # else:
+        #     country_directory = os.path.join(openghginv_path, "countries/")
 
-        filenames = glob.glob(os.path.join(country_directory, f"country_{domain}.nc"))
-        filename = filenames[0]
+        # filenames = glob.glob(os.path.join(country_directory, f"country_{domain}.nc"))
+        # filename = filenames[0]
+        raise ValueError(
+            "Must provide country file explicitly (BM changed 29 Jan 2026, due inversions code not copied correctly.)"
+        )
     else:
         filename = country_file
 
