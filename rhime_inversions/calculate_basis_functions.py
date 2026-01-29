@@ -20,7 +20,7 @@ from typing import Optional
 from collections import namedtuple
 from importlib import reload
 
-from utils import read_netcdfs
+from .utils import read_netcdfs
 
 
 # *****************************************************************************
@@ -809,106 +809,108 @@ def basis_boundary_conditions(
 
 
 BasisFunction = namedtuple("BasisFunction", ["description", "algorithm"])
-basis_functions = {"quadtree": BasisFunction("quadtree algorithm", quadtreebasisfunction),
-                   "weighted": BasisFunction("weighted by data algorithm", bucketbasisfunction),
-                  }
+basis_functions = {
+    "quadtree": BasisFunction("quadtree algorithm", quadtreebasisfunction),
+    "weighted": BasisFunction("weighted by data algorithm", bucketbasisfunction),
+}
 
 
-
-def basis_functions_wrapper(data_dict: dict, 
-                            basis_dict: dict, 
-                            use_bc: bool,
-                            outputname: Optional[str] = None,
-                            outputpath: Optional[str] = None,
-                           ):
+def basis_functions_wrapper(
+    data_dict: dict,
+    basis_dict: dict,
+    use_bc: bool,
+    outputname: Optional[str] = None,
+    outputpath: Optional[str] = None,
+):
     """
     Wrapper function for selecting basis function
     algorithm.
-    
+
     Args:
-        data_dict (dict): 
+        data_dict (dict):
             Dictionary of observations and forward simulations
             datasets created from get_co2_data.py
-        basis_dict (dict): 
+        basis_dict (dict):
             Dictionary of basis functions specifications
         use_bc (bool):
             True: Retrieves BCs as specified in bc_dict.
-            False: Asssumes Obs are assumed to be baseline-subtracted 
+            False: Asssumes Obs are assumed to be baseline-subtracted
                    And BC data are NOT used
         outputname (str):
             Name of output
         outputpath (str):
-            Path to save output                  
+            Path to save output
     """
     import utils
     from sensitivity import fp_sensitivity, bc_sensitivity
-        
-    # Extract inputs from basis_dict 
-    fp_basis_case=basis_dict["fp_basis_case"]
-    basis_directory=basis_dict["basis_directory"]
-    basis_algorithm=basis_dict["fp_basis_algorithm"]
-    nbasis=basis_dict["nbasis"]
-    bc_basis_case=basis_dict["bc_basis_case"]
-    bc_basis_directory=basis_dict["bc_basis_directory"]
-    domain=basis_dict["domain"]
-    source=basis_dict["source"]
-    site=basis_dict["site"]
-    start_date=basis_dict["start_date"]
-    
+
+    # Extract inputs from basis_dict
+    fp_basis_case = basis_dict["fp_basis_case"]
+    basis_directory = basis_dict["basis_directory"]
+    basis_algorithm = basis_dict["fp_basis_algorithm"]
+    nbasis = basis_dict["nbasis"]
+    bc_basis_case = basis_dict["bc_basis_case"]
+    bc_basis_directory = basis_dict["bc_basis_directory"]
+    domain = basis_dict["domain"]
+    source = basis_dict["source"]
+    site = basis_dict["site"]
+    start_date = basis_dict["start_date"]
+
     if fp_basis_case is not None:
         if basis_algorithm:
-            print(f"Basis algorithm {basis_algorithm} and basis case {fp_basis_case} supplied; using {fp_basis_case}.")
-        
-        basis_data_array = basis(domain=domain, 
-                                 basis_case=fp_basis_case, 
-                                 basis_directory=basis_directory,
-                                ).basis
+            print(
+                f"Basis algorithm {basis_algorithm} and basis case {fp_basis_case} supplied; using {fp_basis_case}."
+            )
+
+        basis_data_array = basis(
+            domain=domain,
+            basis_case=fp_basis_case,
+            basis_directory=basis_directory,
+        ).basis
 
         tempdir = None
-        
+
     elif basis_algorithm is None:
         raise ValueError("One of `fp_basis_case` or `basis_algorithm` must be specified.")
 
     else:
         try:
             basis_function = basis_functions[basis_algorithm]
-            
+
         except KeyError as e:
             raise ValueError(
                 "Basis algorithm not recognised. Please use either 'quadtree' or 'weighted', or input a basis function file"
             ) from e
         print(f"Using {basis_function.description} to derive basis functions.")
 
-        
-        tempdir = basis_function.algorithm(source,
-                                           data_dict, 
-                                           site,
-                                           start_date,
-                                           domain,
-                                           "CO2",
-                                           outputname,
-                                           outputpath,
-                                           nbasis,
-                                          )
+        tempdir = basis_function.algorithm(
+            source,
+            data_dict,
+            site,
+            start_date,
+            domain,
+            "CO2",
+            outputname,
+            outputpath,
+            nbasis,
+        )
 
         fp_basis_case = "weighted_co2-" + outputname
         basis_directory = tempdir
-                                                                                               
-    fp_data = fp_sensitivity(data_dict, 
-                             domain,
-                             fp_basis_case,
-                             basis_directory,
-                            )
+
+    fp_data = fp_sensitivity(
+        data_dict,
+        domain,
+        fp_basis_case,
+        basis_directory,
+    )
 
     if use_bc is True:
-        fp_data = bc_sensitivity(data_dict,
-                                 domain=domain,
-                                 basis_case=bc_basis_case,
-                                 bc_basis_directory=bc_basis_directory,
-                                )
+        fp_data = bc_sensitivity(
+            data_dict,
+            domain=domain,
+            basis_case=bc_basis_case,
+            bc_basis_directory=bc_basis_directory,
+        )
 
     return fp_data, tempdir, basis_directory, bc_basis_directory
-
-
-
-
