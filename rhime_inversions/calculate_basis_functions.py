@@ -20,10 +20,13 @@ from typing import Optional
 from collections import namedtuple
 from importlib import reload
 
+from utils import read_netcdfs
+
 
 # *****************************************************************************
-# BASIS FUNCTION ALGORITHMS 
+# BASIS FUNCTION ALGORITHMS
 # *****************************************************************************
+
 
 class quadTreeNode:
     def __init__(self, xStart, xEnd, yStart, yEnd):
@@ -54,7 +57,9 @@ class quadTreeNode:
         dy = self.yEnd - self.yStart
 
         # create 4 children for subdivison
-        self.child1 = quadTreeNode(self.xStart, self.xStart + dx // 2, self.yStart, self.yStart + dy // 2)
+        self.child1 = quadTreeNode(
+            self.xStart, self.xStart + dx // 2, self.yStart, self.yStart + dy // 2
+        )
         self.child2 = quadTreeNode(
             self.xStart + dx // 2, self.xStart + dx, self.yStart, self.yStart + dy // 2
         )
@@ -80,6 +85,7 @@ class quadTreeNode:
             self.child2.appendLeaves(leafList)
             self.child3.appendLeaves(leafList)
             self.child4.appendLeaves(leafList)
+
 
 def quadTreeGrid(grid, limit):
     """
@@ -115,6 +121,7 @@ def quadTreeGrid(grid, limit):
         boxList.append([leaf.xStart, leaf.xEnd, leaf.yStart, leaf.yEnd])
 
     return outputGrid, boxList
+
 
 def quadtreebasisfunction(
     emissions_name,
@@ -161,8 +168,8 @@ def quadtreebasisfunction(
         Default of None makes a temp directory.
       nbasis (int/list):
         Desired number of basis function regions.
-        If int: same nbasis value used for all flux sectors 
-        If list: specifiy nbasis value per flux sector 
+        If int: same nbasis value used for all flux sectors
+        If list: specifiy nbasis value per flux sector
 
     Returns:
         If outputdir is None, then returns a Temp directory. The new basis function is saved in this Temp directory.
@@ -171,18 +178,18 @@ def quadtreebasisfunction(
     """
     if emissions_name == None:
         raise ValueError("emissions_name needs to be specified")
-    
+
     # No. of flux sectors
     nsectors = len(emissions_name)
-    
-    # If one nbasis value provided, we assume that is 
-    # the No. of basis functions for each flux sector 
+
+    # If one nbasis value provided, we assume that is
+    # the No. of basis functions for each flux sector
     if isinstance(nbasis, int):
         nbasis = [nbasis] * nsectors
-        
+
     basis_per_sector = {}
-    
-    # Calculate mean combined footprint of all sites being used 
+
+    # Calculate mean combined footprint of all sites being used
     meanfp = np.zeros((fp_all[sites[0]].fp.shape[0], fp_all[sites[0]].fp.shape[1]))
     div = 0
     for site in sites:
@@ -195,12 +202,14 @@ def quadtreebasisfunction(
         flux_i = fp_all[".flux"][emissions_name[i]].data.flux.values
         absflux = np.absolute(flux_i)
         meanflux = np.squeeze(absflux)
-        
+
         if meanflux.shape != meanfp.shape:
             meanflux = np.mean(meanflux, axis=2)
-        
+
         fps = meanfp * meanflux
-        print(f"Calculating basis functions for {emissions_name[i]} using {nbasis[i]} basis functions ...")
+        print(
+            f"Calculating basis functions for {emissions_name[i]} using {nbasis[i]} basis functions ..."
+        )
 
         def qtoptim(x):
             basisQuad, boxes = quadTreeGrid(fps, x)
@@ -208,19 +217,20 @@ def quadtreebasisfunction(
 
         cost = 1e6
         pwr = 0
-        while cost > 3.:
-            optim = scipy.optimize.dual_annealing(qtoptim, np.expand_dims([0, 100 / 10**pwr], axis=0))
+        while cost > 3.0:
+            optim = scipy.optimize.dual_annealing(
+                qtoptim, np.expand_dims([0, 100 / 10**pwr], axis=0)
+            )
             cost = np.sqrt(optim.fun)
             pwr += 1
             if pwr > 10:
                 raise Exception("Quadtree did not converge after max iterations.")
         basisQuad, boxes = quadTreeGrid(fps, optim.x[0])
-        
-        basis_per_sector[emissions_name[i]] = np.expand_dims(basisQuad + 1, axis=2) 
 
+        basis_per_sector[emissions_name[i]] = np.expand_dims(basisQuad + 1, axis=2)
 
     lon = fp_all[sites[0]].lon.values
-    lat = fp_all[sites[0]].lat.values     
+    lat = fp_all[sites[0]].lat.values
     time = [pd.to_datetime(start_date)]
 
     base = []
@@ -228,32 +238,48 @@ def quadtreebasisfunction(
         base.append(basis_per_sector[key])
     base = np.array(base)
 
-    newds = xr.Dataset({"basis" : (["sector", "lat", "lon", "time"], base)}, 
-                        coords={"time": (["time"], time), 
-                                "lat": (["lat"], lat), 
-                                "lon": (["lon"], lon),
-                                "sector": (["sector"], emissions_name)
-                       })  
- 
-    newds.lat.attrs["long_name"] = "latitude" 
-    newds.lon.attrs["long_name"] = "longitude" 
+    newds = xr.Dataset(
+        {"basis": (["sector", "lat", "lon", "time"], base)},
+        coords={
+            "time": (["time"], time),
+            "lat": (["lat"], lat),
+            "lon": (["lon"], lon),
+            "sector": (["sector"], emissions_name),
+        },
+    )
+
+    newds.lat.attrs["long_name"] = "latitude"
+    newds.lon.attrs["long_name"] = "longitude"
     newds.lat.attrs["units"] = "degrees_north"
-    newds.lon.attrs["units"] = "degrees_east"    
+    newds.lon.attrs["units"] = "degrees_east"
     newds.attrs["creator"] = getpass.getuser()
     newds.attrs["date created"] = str(pd.Timestamp.today())
-    
+
     if outputdir is None:
         cwd = os.getcwd()
         tempdir = os.path.join(cwd, f"Temp_{str(uuid.uuid4())}")
-        os.mkdir(tempdir)    
-        os.mkdir(os.path.join(tempdir,f"{domain}/"))
-        newds.to_netcdf(os.path.join(tempdir, domain, f"quadtree_{species}-{outputname}_{domain}_{start_date.split('-')[0]}.nc"), mode="w")
+        os.mkdir(tempdir)
+        os.mkdir(os.path.join(tempdir, f"{domain}/"))
+        newds.to_netcdf(
+            os.path.join(
+                tempdir,
+                domain,
+                f"quadtree_{species}-{outputname}_{domain}_{start_date.split('-')[0]}.nc",
+            ),
+            mode="w",
+        )
         return tempdir
     else:
         basisoutpath = os.path.join(outputdir, domain)
         if not os.path.exists(basisoutpath):
             os.makedirs(basisoutpath)
-        newds.to_netcdf(os.path.join(basisoutpath, f"quadtree_{species}-{outputname}_{domain}_{start_date.split('-')[0]}.nc"), mode="w")
+        newds.to_netcdf(
+            os.path.join(
+                basisoutpath,
+                f"quadtree_{species}-{outputname}_{domain}_{start_date.split('-')[0]}.nc",
+            ),
+            mode="w",
+        )
 
         return outputdir
 
@@ -269,8 +295,11 @@ def load_landsea_indices():
     sea = 0
     -------------------------------------------------------
     """
-    landsea_indices = xr.open_dataset("/user/work/wz22079/country_masks/country-EUROPE-UKMO-landsea-2023.nc")
+    landsea_indices = xr.open_dataset(
+        "/user/work/wz22079/country_masks/country-EUROPE-UKMO-landsea-2023.nc"
+    )
     return landsea_indices["country"].values
+
 
 def bucket_value_split(grid, bucket, offset_x=0, offset_y=0):
     """
@@ -302,20 +331,22 @@ def bucket_value_split(grid, bucket, offset_x=0, offset_y=0):
     else:
         if grid.shape[0] >= grid.shape[1]:
             half_y = grid.shape[0] // 2
-            return bucket_value_split(grid[0:half_y, :], bucket, offset_x, offset_y) + bucket_value_split(
-                grid[half_y:, :], bucket, offset_x, offset_y + half_y
-            )
+            return bucket_value_split(
+                grid[0:half_y, :], bucket, offset_x, offset_y
+            ) + bucket_value_split(grid[half_y:, :], bucket, offset_x, offset_y + half_y)
 
         elif grid.shape[0] < grid.shape[1]:
             half_x = grid.shape[1] // 2
-            return bucket_value_split(grid[:, 0:half_x], bucket, offset_x, offset_y) + bucket_value_split(
-                grid[:, half_x:], bucket, offset_x + half_x, offset_y
-            )
+            return bucket_value_split(
+                grid[:, 0:half_x], bucket, offset_x, offset_y
+            ) + bucket_value_split(grid[:, half_x:], bucket, offset_x + half_x, offset_y)
+
 
 # Optimize bucket value to number of desired regions
 def get_nregions(bucket, grid):
     """Returns no. of basis functions for bucket value"""
     return np.max(bucket_split_landsea_basis(grid, bucket))
+
 
 def optimize_nregions(bucket, grid, nregion, tol, max_iter=2000):
     """
@@ -335,14 +366,15 @@ def optimize_nregions(bucket, grid, nregion, tol, max_iter=2000):
         dynamic_step = step_factor * (1 + abs(error) / max(nregion, 1))
 
         if error < 0:
-            bucket *= (1 - dynamic_step)
+            bucket *= 1 - dynamic_step
         else:
-            bucket *= (1 + dynamic_step)
+            bucket *= 1 + dynamic_step
 
         iteration += 1
 
     # Return the last computed bucket if convergence wasn't achieved
     return bucket
+
 
 # def optimize_nregions(bucket, grid, nregion, tol):
 #     """
@@ -360,6 +392,7 @@ def optimize_nregions(bucket, grid, nregion, tol, max_iter=2000):
 #     elif get_nregions(bucket, grid) > nregion - tol:
 #         bucket = bucket * 1.005
 #         return optimize_nregions(bucket, grid, nregion, tol)
+
 
 def bucket_split_landsea_basis(grid, bucket, offset_x=0, offset_y=0):
     """
@@ -385,8 +418,8 @@ def bucket_split_landsea_basis(grid, bucket, offset_x=0, offset_y=0):
     mybasis_function = np.zeros(shape=grid.shape)
 
     for i in range(len(myregions)):
-        ymin, ymax = myregions[i][0]+offset_y, myregions[i][1]+offset_y
-        xmin, xmax = myregions[i][2]+offset_x, myregions[i][3]+offset_x
+        ymin, ymax = myregions[i][0] + offset_y, myregions[i][1] + offset_y
+        xmin, xmax = myregions[i][2] + offset_x, myregions[i][3] + offset_x
 
         inds_y0, inds_x0 = np.where(landsea_indices[ymin:ymax, xmin:xmax] == 0)
         inds_y1, inds_x1 = np.where(landsea_indices[ymin:ymax, xmin:xmax] == 1)
@@ -396,14 +429,15 @@ def bucket_split_landsea_basis(grid, bucket, offset_x=0, offset_y=0):
         if len(inds_y0) != 0:
             count += 1
             for i in range(len(inds_y0)):
-                mybasis_function[inds_y0[i]+ymin-offset_y, inds_x0[i]+xmin-offset_x] = count
+                mybasis_function[inds_y0[i] + ymin - offset_y, inds_x0[i] + xmin - offset_x] = count
 
         if len(inds_y1) != 0:
             count += 1
             for i in range(len(inds_y1)):
-                mybasis_function[inds_y1[i]+ymin-offset_y, inds_x1[i]+xmin-offset_x] = count
+                mybasis_function[inds_y1[i] + ymin - offset_y, inds_x1[i] + xmin - offset_x] = count
 
     return mybasis_function
+
 
 def nregion_landsea_basis(grid, bucket=1, nregion=100, tol=1, offset_x=0, offset_y=0):
     """
@@ -438,16 +472,17 @@ def nregion_landsea_basis(grid, bucket=1, nregion=100, tol=1, offset_x=0, offset
     return basis_function
 
 
-def bucketbasisfunction(emissions_name: (str, list),
-                        data_dict: dict,
-                        sites: (str, list),
-                        start_date: str,
-                        domain: str,
-                        species: str,
-                        outputname: str,
-                        outputdir: str,
-                        nbasis: (int, list),
-                       ):
+def bucketbasisfunction(
+    emissions_name: (str, list),
+    data_dict: dict,
+    sites: (str, list),
+    start_date: str,
+    domain: str,
+    species: str,
+    outputname: str,
+    outputdir: str,
+    nbasis: (int, list),
+):
     """
     Basis functions calculated using a weighted region approach
     where each basis function / scaling region contains approximately
@@ -455,7 +490,7 @@ def bucketbasisfunction(emissions_name: (str, list),
     -----------------------------------
     Args:
       emissions_name (str/list):
-        List of keyword "source" args used for retrieving 
+        List of keyword "source" args used for retrieving
         emissions files from the object store.
       data_all (dict):
         data_dict dictionary object as produced from get_co2_data
@@ -473,24 +508,24 @@ def bucketbasisfunction(emissions_name: (str, list),
         Directory where inversion run outputs are saved
       nbasis (int/list):
         Desired number of basis function regions.
-        If int: same nbasis value used for all flux sectors 
-        If list: specifiy nbasis value per flux sector 
+        If int: same nbasis value used for all flux sectors
+        If list: specifiy nbasis value per flux sector
 
     """
     if emissions_name is None:
         raise ValueError(" 'emissions_name' needs to be specified \n")
-    
+
     # No. of flux sectors
     nsectors = len(emissions_name)
-    
-    # If one nbasis value provided, we assume that is 
-    # the no. of basis functions for each flux sector 
+
+    # If one nbasis value provided, we assume that is
+    # the no. of basis functions for each flux sector
     if isinstance(nbasis, int):
         nbasis = [nbasis] * nsectors
-        
+
     basis_per_sector = {}
-    
-    # Calculate mean combined footprint of all sites being used 
+
+    # Calculate mean combined footprint of all sites being used
     meanfp = np.zeros((data_dict[sites[0]].fp.shape[0], data_dict[sites[0]].fp.shape[1]))
     div = 0
     for site in sites:
@@ -499,16 +534,16 @@ def bucketbasisfunction(emissions_name: (str, list),
         meanfp += data_dict[site].fp.mean(dim="time").values
     meanfp /= len(sites)
 
-    # Calculate basis function per flux sector 
+    # Calculate basis function per flux sector
     print("Using absolute values of fluxes to calculate basis functions")
     for i in range(0, nsectors):
         flux_i = data_dict[".flux"][emissions_name[i]].data.flux
         absflux = np.absolute(flux_i)
-                
+
         if absflux.shape != meanfp.shape:
             meanflux = xr.DataArray.mean(absflux, dim="time")
             print(meanflux.shape)
-            
+
             if meanflux.shape == meanfp.shape:
                 fps = meanfp * meanflux.values
             else:
@@ -516,100 +551,108 @@ def bucketbasisfunction(emissions_name: (str, list),
 
         # Check whether a significant proportion of the fps domain has zero values
         # If so, apply basis functions to region where fluxes exist
-        fps_nonzero_inds = np.where(fps!=0)
-        prop = len(fps_nonzero_inds[0])/len(fps.ravel())
+        fps_nonzero_inds = np.where(fps != 0)
+        prop = len(fps_nonzero_inds[0]) / len(fps.ravel())
         print(f"Proportion of non-zero flux*fp grid cells in domain {prop}")
-        
+
         if prop > 0.55:
-            print(f"Calculating basis functions for {emissions_name[i]} using {nbasis[i]} basis functions ...")
+            print(
+                f"Calculating basis functions for {emissions_name[i]} using {nbasis[i]} basis functions ..."
+            )
             print("Calculating basis functions over entire model domain")
-            
-            # Use median grid value as starting point for buckets value 
+
+            # Use median grid value as starting point for buckets value
             starting_bucket_value = np.nanmedian(fps)
             bucket_basis_i = nregion_landsea_basis(fps, starting_bucket_value, nbasis[i])
             basis_per_sector[emissions_name[i]] = np.expand_dims(bucket_basis_i, axis=2)
-            
+
         else:
-            print(f"Calculating basis functions for {emissions_name[i]} using {nbasis[i]} basis functions ...")
+            print(
+                f"Calculating basis functions for {emissions_name[i]} using {nbasis[i]} basis functions ..."
+            )
             print("Calculating basis functions over an inner domain only.")
-            
+
             # Find sub-domain where fluxes exist
             i_min, i_max = np.nanmin(fps_nonzero_inds[0]), np.nanmax(fps_nonzero_inds[0])
             j_min, j_max = np.nanmin(fps_nonzero_inds[1]), np.nanmax(fps_nonzero_inds[1])
 
             n, m = fps.shape[0], fps.shape[1]
-            
+
             # Inner region where values exist
-            fps_inner = fps[i_min:i_max+1, j_min:j_max+1]
+            fps_inner = fps[i_min : i_max + 1, j_min : j_max + 1]
             starting_bucket_value = np.nanmedian(fps_inner)
-            
-            # Use median grid value as starting point for buckets value 
-            bucket_basis_i = nregion_landsea_basis(fps_inner, 
-                                                   starting_bucket_value, 
-                                                   nbasis[i], 
-                                                   1, 
-                                                   j_min, 
-                                                   i_min,
-                                                  )
+
+            # Use median grid value as starting point for buckets value
+            bucket_basis_i = nregion_landsea_basis(
+                fps_inner,
+                starting_bucket_value,
+                nbasis[i],
+                1,
+                j_min,
+                i_min,
+            )
 
             new_basis_grid = np.zeros(fps.shape)
-            
+
             # region 1
             for k in range(0, i_min):
                 for j in range(0, j_min):
-                    new_basis_grid[k,j] = 1 + bucket_basis_i.max()
+                    new_basis_grid[k, j] = 1 + bucket_basis_i.max()
             # region 2
             for k in range(i_min, i_max):
                 for j in range(0, j_min):
-                    new_basis_grid[k,j] = 2 + bucket_basis_i.max()
+                    new_basis_grid[k, j] = 2 + bucket_basis_i.max()
             # region 3
             for k in range(i_max, n):
                 for j in range(0, j_min):
-                    new_basis_grid[k,j] = 3 + bucket_basis_i.max()
+                    new_basis_grid[k, j] = 3 + bucket_basis_i.max()
             # region 4
             for k in range(0, i_min):
                 for j in range(j_min, j_max):
-                    new_basis_grid[k,j] = 4 + bucket_basis_i.max()
+                    new_basis_grid[k, j] = 4 + bucket_basis_i.max()
             # region 5
             for k in range(i_max, n):
                 for j in range(j_min, j_max):
-                    new_basis_grid[k,j] = 5 + bucket_basis_i.max()
+                    new_basis_grid[k, j] = 5 + bucket_basis_i.max()
             # region 6
             for k in range(0, i_min):
                 for j in range(j_max, m):
-                    new_basis_grid[k,j] = 6 + bucket_basis_i.max()
+                    new_basis_grid[k, j] = 6 + bucket_basis_i.max()
             # region 7
             for k in range(i_min, i_max):
                 for j in range(j_max, m):
-                    new_basis_grid[k,j] = 7 + bucket_basis_i.max()
+                    new_basis_grid[k, j] = 7 + bucket_basis_i.max()
             # region 8
             for k in range(i_max, n):
                 for j in range(j_max, m):
-                    new_basis_grid[k,j] = 8 + bucket_basis_i.max()
+                    new_basis_grid[k, j] = 8 + bucket_basis_i.max()
             # Inner region
             for k in range(i_min, i_max):
                 for j in range(j_min, j_max):
-                    new_basis_grid[k,j] = bucket_basis_i[k-i_min, j-j_min]
+                    new_basis_grid[k, j] = bucket_basis_i[k - i_min, j - j_min]
 
-            # Add sector basis function to dict 
+            # Add sector basis function to dict
             basis_per_sector[emissions_name[i]] = np.expand_dims(new_basis_grid, axis=2)
-        
+
     lon = data_dict[sites[0]].lon.values
     lat = data_dict[sites[0]].lat.values
     time = [pd.to_datetime(start_date)]
-    
+
     base = []
     for key in basis_per_sector.keys():
         base.append(basis_per_sector[key])
     base = np.array(base)
 
     # Create xarray dataset with basis function per sector
-    newds = xr.Dataset({"basis": (["sector", "lat", "lon", "time"], base)},
-                        coords = {"time": (["time"], time),
-                                  "lat": (["lat"], lat),
-                                  "lon": (["lon"], lon),
-                                  "sector": (["sector"], emissions_name),
-                                 })
+    newds = xr.Dataset(
+        {"basis": (["sector", "lat", "lon", "time"], base)},
+        coords={
+            "time": (["time"], time),
+            "lat": (["lat"], lat),
+            "lon": (["lon"], lon),
+            "sector": (["sector"], emissions_name),
+        },
+    )
 
     newds.lat.attrs["long_name"] = "latitude"
     newds.lon.attrs["long_name"] = "longitude"
@@ -624,25 +667,40 @@ def bucketbasisfunction(emissions_name: (str, list),
         tempdir = os.path.join(cwd, f"Temp_{str(uuid.uuid4())}")
         os.mkdir(tempdir)
         os.mkdir(os.path.join(tempdir, f"{domain}/"))
-        newds.to_netcdf(os.path.join(tempdir, domain, f"weighted_co2-{outputname}_{domain}_{start_date.split('-')[0]}{start_date.split('-')[1]}.nc"), mode="w")
+        newds.to_netcdf(
+            os.path.join(
+                tempdir,
+                domain,
+                f"weighted_co2-{outputname}_{domain}_{start_date.split('-')[0]}{start_date.split('-')[1]}.nc",
+            ),
+            mode="w",
+        )
         return tempdir
 
     else:
         basisoutpath = os.path.join(outputdir, domain)
         if not os.path.exists(basisoutpath):
             os.makedirs(basisoutpath)
-        newds.to_netcdf(os.path.join(basisoutpath, f"weighted_co2-{outputname}_{domain}_{start_date.split('-')[0]}{start_date.split('-')[1]}.nc"), mode='w')
+        newds.to_netcdf(
+            os.path.join(
+                basisoutpath,
+                f"weighted_co2-{outputname}_{domain}_{start_date.split('-')[0]}{start_date.split('-')[1]}.nc",
+            ),
+            mode="w",
+        )
         return outputdir
 
 
 # *****************************************************************************
-# BASIS FUNCTION UTILITIES 
+# BASIS FUNCTION UTILITIES
 # *****************************************************************************
 
-def basis(domain: str, 
-          basis_case: str, 
-          basis_directory: Optional[str] = None,
-         ):
+
+def basis(
+    domain: str,
+    basis_case: str,
+    basis_directory: Optional[str] = None,
+):
     """
     The basis function reads in the all matching files for the
     basis case and domain as an xarray Dataset.
@@ -670,10 +728,8 @@ def basis(domain: str,
         combined dataset of matching basis functions
     -----------------------------------
     """
-    from utils import read_netcdfs
-    
     openghginv_path = "/user/home/wz22079/my_openghg/openghg_inversions/scratch/"
-    
+
     if basis_directory is None:
         if not os.path.exists(os.path.join(openghginv_path, "basis_functions/")):
             os.makedirs(os.path.join(openghginv_path, "basis_functions/"))
@@ -693,10 +749,11 @@ def basis(domain: str,
     return basis_ds
 
 
-def basis_boundary_conditions(domain: str, 
-                              basis_case: str, 
-                              bc_basis_directory: Optional[str] = None,
-                             ):
+def basis_boundary_conditions(
+    domain: str,
+    basis_case: str,
+    bc_basis_directory: Optional[str] = None,
+):
     """
     The basis_boundary_conditions function reads in all matching files
     for the boundary conditions basis case and domain as an xarray Dataset.
@@ -721,8 +778,6 @@ def basis_boundary_conditions(domain: str,
         Combined dataset of matching basis functions
     -----------------------------------
     """
-    from utils import read_netcdfs
-    
     openghginv_path = "/user/home/wz22079/my_openghg/openghg_inversions/scratch/"
 
     if bc_basis_directory is None:
