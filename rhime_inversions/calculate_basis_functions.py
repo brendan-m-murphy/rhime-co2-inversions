@@ -18,6 +18,7 @@ import pandas as pd
 from typing import Optional
 from collections import namedtuple
 
+from .sensitivity import fp_sensitivity, bc_sensitivity
 from .utils import read_netcdfs
 
 
@@ -839,8 +840,6 @@ def basis_functions_wrapper(
         outputpath (str):
             Path to save output
     """
-    from sensitivity import fp_sensitivity, bc_sensitivity
-
     # Extract inputs from basis_dict
     fp_basis_case = basis_dict["fp_basis_case"]
     basis_directory = basis_dict["basis_directory"]
