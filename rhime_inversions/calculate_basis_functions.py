@@ -15,12 +15,19 @@ import numpy as np
 import xarray as xr
 import pandas as pd
 
+from pathlib import Path
 from typing import Optional
 from collections import namedtuple
+from functools import partial
+
+from openghg_inversions.basis.algorithms._weighted import load_landsea_indices as inv_load_landsea_indices
 
 from .sensitivity import fp_sensitivity, bc_sensitivity
 from .utils import read_netcdfs
 
+# work around for hardcoded paths
+scratch_path = Path.home() / "openghg_inversions_scratch"
+scratch_path.mkdir(exist_ok=True)
 
 # *****************************************************************************
 # BASIS FUNCTION ALGORITHMS
@@ -56,9 +63,7 @@ class quadTreeNode:
         dy = self.yEnd - self.yStart
 
         # create 4 children for subdivison
-        self.child1 = quadTreeNode(
-            self.xStart, self.xStart + dx // 2, self.yStart, self.yStart + dy // 2
-        )
+        self.child1 = quadTreeNode(self.xStart, self.xStart + dx // 2, self.yStart, self.yStart + dy // 2)
         self.child2 = quadTreeNode(
             self.xStart + dx // 2, self.xStart + dx, self.yStart, self.yStart + dy // 2
         )
@@ -206,9 +211,7 @@ def quadtreebasisfunction(
             meanflux = np.mean(meanflux, axis=2)
 
         fps = meanfp * meanflux
-        print(
-            f"Calculating basis functions for {emissions_name[i]} using {nbasis[i]} basis functions ..."
-        )
+        print(f"Calculating basis functions for {emissions_name[i]} using {nbasis[i]} basis functions ...")
 
         def qtoptim(x):
             basisQuad, boxes = quadTreeGrid(fps, x)
@@ -217,9 +220,7 @@ def quadtreebasisfunction(
         cost = 1e6
         pwr = 0
         while cost > 3.0:
-            optim = scipy.optimize.dual_annealing(
-                qtoptim, np.expand_dims([0, 100 / 10**pwr], axis=0)
-            )
+            optim = scipy.optimize.dual_annealing(qtoptim, np.expand_dims([0, 100 / 10**pwr], axis=0))
             cost = np.sqrt(optim.fun)
             pwr += 1
             if pwr > 10:
@@ -284,20 +285,7 @@ def quadtreebasisfunction(
 
 
 # BUCKET BASIS FUNCTIONS
-def load_landsea_indices():
-    """
-    -------------------------------------------------------
-    Load UKMO array with indices that separate
-    land and sea regions in EUROPE domain
-    -------------------------------------------------------
-    land = 1
-    sea = 0
-    -------------------------------------------------------
-    """
-    landsea_indices = xr.open_dataset(
-        "/user/work/wz22079/country_masks/country-EUROPE-UKMO-landsea-2023.nc"
-    )
-    return landsea_indices["country"].values
+load_landsea_indices = partial(inv_load_landsea_indices, domain="EUROPE")
 
 
 def bucket_value_split(grid, bucket, offset_x=0, offset_y=0):
@@ -330,15 +318,15 @@ def bucket_value_split(grid, bucket, offset_x=0, offset_y=0):
     else:
         if grid.shape[0] >= grid.shape[1]:
             half_y = grid.shape[0] // 2
-            return bucket_value_split(
-                grid[0:half_y, :], bucket, offset_x, offset_y
-            ) + bucket_value_split(grid[half_y:, :], bucket, offset_x, offset_y + half_y)
+            return bucket_value_split(grid[0:half_y, :], bucket, offset_x, offset_y) + bucket_value_split(
+                grid[half_y:, :], bucket, offset_x, offset_y + half_y
+            )
 
         elif grid.shape[0] < grid.shape[1]:
             half_x = grid.shape[1] // 2
-            return bucket_value_split(
-                grid[:, 0:half_x], bucket, offset_x, offset_y
-            ) + bucket_value_split(grid[:, half_x:], bucket, offset_x + half_x, offset_y)
+            return bucket_value_split(grid[:, 0:half_x], bucket, offset_x, offset_y) + bucket_value_split(
+                grid[:, half_x:], bucket, offset_x + half_x, offset_y
+            )
 
 
 # Optimize bucket value to number of desired regions
@@ -661,8 +649,7 @@ def bucketbasisfunction(
     newds.attrs["date created"] = str(pd.Timestamp.today())
 
     if outputdir is None:
-        # cwd = os.getcwd()
-        cwd = "/user/home/wz22079/my_openghg/openghg_inversions/scratch/"
+        cwd = scratch_path
         tempdir = os.path.join(cwd, f"Temp_{str(uuid.uuid4())}")
         os.mkdir(tempdir)
         os.mkdir(os.path.join(tempdir, f"{domain}/"))
@@ -727,7 +714,7 @@ def basis(
         combined dataset of matching basis functions
     -----------------------------------
     """
-    openghginv_path = "/user/home/wz22079/my_openghg/openghg_inversions/scratch/"
+    openghginv_path = scratch_path
 
     if basis_directory is None:
         if not os.path.exists(os.path.join(openghginv_path, "basis_functions/")):
@@ -777,7 +764,7 @@ def basis_boundary_conditions(
         Combined dataset of matching basis functions
     -----------------------------------
     """
-    openghginv_path = "/user/home/wz22079/my_openghg/openghg_inversions/scratch/"
+    openghginv_path = scratch_path
 
     if bc_basis_directory is None:
         if not os.path.exists(os.path.join(openghginv_path, "bc_basis_functions/")):
