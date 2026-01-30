@@ -155,9 +155,7 @@ def get_mf_bc_data(bc_dict: dict):
                     get_bc_data.data[key].values *= bc_dict["bc_sf"][key]
             elif type(bc_dict["bc_sf"]) in [int, float]:
                 for key in get_bc_data.data.keys():
-                    print(
-                        f'Warning! Applying a multiplicative scale factor of {bc_dict["bc_sf"]} to {key}.'
-                    )
+                    print(f'Warning! Applying a multiplicative scale factor of {bc_dict["bc_sf"]} to {key}.')
                     get_bc_data.data[key].values *= bc_dict["bc_sf"]
             else:
                 raise KeyError("Use a dict or float value for the BC scale factors.")
@@ -244,9 +242,9 @@ def get_mf_obs(
             #    variability in mole fractions over the averaging period.
 
             # TO CHECK: variability for optical instruments, repeatability for ECD?
-            if "mf_variability" in list(
+            if "mf_variability" in list(site_data_no_ave[site].keys()) and "mf_repeatability" in list(
                 site_data_no_ave[site].keys()
-            ) and "mf_repeatability" in list(site_data_no_ave[site].keys()):
+            ):
                 # Sampled mean error of mf_variability (not averaged)
                 ds_resampled_rep = (
                     np.sqrt(
@@ -265,9 +263,9 @@ def get_mf_obs(
                 )
                 site_data[site]["mf_variability"] = site_data[site]["mf_variability"] ** 2
 
-            elif "mf_variability" in list(
+            elif "mf_variability" in list(site_data_no_ave[site].keys()) and "mf_repeatability" not in list(
                 site_data_no_ave[site].keys()
-            ) and "mf_repeatability" not in list(site_data_no_ave[site].keys()):
+            ):
                 # In this instance, there is no repeatability. We use the sampled mean error of the variability in lieu
                 ds_resampled_rep = (
                     np.sqrt(
@@ -283,9 +281,9 @@ def get_mf_obs(
                 site_data[site]["mf_variability"] = site_data[site]["mf_variability"] ** 2
                 site_data[site]["mf_repeatability"] = ds_resampled_rep
 
-            elif "mf_variability" not in list(
+            elif "mf_variability" not in list(site_data_no_ave[site].keys()) and "mf_repeatability" in list(
                 site_data_no_ave[site].keys()
-            ) and "mf_repeatability" in list(site_data_no_ave[site].keys()):
+            ):
                 site_data[site]["mf_variability"] = site_data[site]["mf_variability"] ** 2
 
             elif "mf_variability" not in list(
@@ -298,9 +296,7 @@ def get_mf_obs(
                 # Calculates the sampled mean error from pseudo uncertainties
                 ds_resampled_rep = (
                     np.sqrt((pseudo_err**2).resample(time=obs_dict["averaging_period"][i]).sum())
-                    / site_data_no_ave[site]["mf"]
-                    .resample(time=obs_dict["averaging_period"][i])
-                    .count()
+                    / site_data_no_ave[site]["mf"].resample(time=obs_dict["averaging_period"][i]).count()
                 )
 
                 site_data[site]["mf_repeatability"] = ds_resampled_rep
@@ -472,7 +468,7 @@ def get_mf_obs_sims(
                         else "mf_mod_high_res_sectoral"
                     )
 
-                    for s in scenario_combined.source:
+                    for s in scenario_combined.coords["source"].values:
                         scenario_combined[f"mf_mod_{s}"] = scenario_combined[mf_mod_var].sel(
                             source=s, drop=True
                         )
@@ -480,9 +476,7 @@ def get_mf_obs_sims(
                             source=s, drop=True
                         )
 
-                    scenario_combined = scenario_combined.drop_vars(
-                        [mf_mod_var, "fp_x_flux_sectoral"]
-                    )
+                    scenario_combined = scenario_combined.drop_vars([mf_mod_var, "fp_x_flux_sectoral"])
 
                 data_dict[site] = scenario_combined
                 # data_dict[site].bc_mod.values *= 1e-3 # convert from ppb (default in openghg) to ppm
