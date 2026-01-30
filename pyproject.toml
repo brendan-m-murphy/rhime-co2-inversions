@@ -21,7 +21,7 @@ dependencies = [
     "arviz",
     "pytensor",
     "scipy",
-    "openghg",
+    "openghg>=0.17",
     "ruff>=0.14.14",
     "openghg-defs>=0.0.3",
     "openghg-inversions>=0.6.0",
