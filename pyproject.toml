@@ -46,3 +46,9 @@ target-version = ['py39', 'py310', 'py311']
 [tool.ruff]
 line-length = 110
 target-version = "py39"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.0.2",
+    "pytest-mock>=3.15.1",
+]
