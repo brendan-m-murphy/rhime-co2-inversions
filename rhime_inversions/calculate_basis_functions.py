@@ -612,6 +612,8 @@ def bucketbasisfunction(
             ]  # Add sector basis function to dict
             basis_per_sector[emissions_name[i]] = np.expand_dims(new_basis_grid, axis=2)
 
+            print(f"Found {bmax + 8} basis functions.")
+
     lon = data_dict[sites[0]].lon.values
     lat = data_dict[sites[0]].lat.values
     time = [pd.to_datetime(start_date)]
