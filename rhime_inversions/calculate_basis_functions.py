@@ -550,7 +550,7 @@ def bucketbasisfunction(
 
             # Use median grid value as starting point for buckets value
             # starting_bucket_value = np.nanmedian(fps)
-            starting_bucket_value = max([np.nanmedian(fps), np.nansum(fps) / nbasis])
+            starting_bucket_value = max([np.nanmedian(fps), np.nansum(fps) / nbasis[i]])
             bucket_basis_i = nregion_landsea_basis(fps, starting_bucket_value, nbasis[i])
             basis_per_sector[emissions_name[i]] = np.expand_dims(bucket_basis_i, axis=2)
 
@@ -572,7 +572,6 @@ def bucketbasisfunction(
 
             nbasis_inner = max([1, nbasis[i] - 8])
 
-            print("Possible starting values:", [np.nanmedian(fps_inner), np.nansum(fps_inner) / nbasis_inner])
             starting_bucket_value = max([np.nanmedian(fps_inner), np.nansum(fps_inner) / nbasis_inner])
 
             # Use median grid value as starting point for buckets value
@@ -588,7 +587,7 @@ def bucketbasisfunction(
             new_basis_grid = np.zeros(fps.shape)
 
             bmax = bucket_basis_i.max()
-            print(f"Found {bmax} inner basis functions.")
+            print(f"Found {bmax} inner basis functions; {bmax + 8} basis functions total.")
 
             # region 1
             new_basis_grid[0:i_min, 0:j_min] = 1 + bmax
@@ -612,8 +611,6 @@ def bucketbasisfunction(
                 0 : (i_max - i_min), 0 : (j_max - j_min)
             ]  # Add sector basis function to dict
             basis_per_sector[emissions_name[i]] = np.expand_dims(new_basis_grid, axis=2)
-
-            print(f"Found {bmax + 8} basis functions.")
 
     lon = data_dict[sites[0]].lon.values
     lat = data_dict[sites[0]].lat.values

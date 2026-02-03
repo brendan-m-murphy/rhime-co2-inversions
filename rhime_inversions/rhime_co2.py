@@ -250,6 +250,9 @@ def rhime_inversions(
                 Hx = np.hstack((Hx, fp_data[site].H.values))
                 Hxerr = np.hstack((Hxerr, fp_data[site].Herr.values))
 
+    # record shape of assembled arrays
+    logger.info("Assembled arrays: Hx=%s Hbc=%s Y=%s error=%s", Hx.shape, Hbc.shape, Y.shape, error.shape)
+
     # Mask source regions in Hx
     with log_step(logger, "create basis_region_mask"):
         basis_region_mask = np.zeros_like(fp_data[site]["region"].values)

@@ -254,6 +254,10 @@ def test_example_config_post_data(tmpdir, mocker, rhime_test_config):
     outputpath = str(tmpdir)
     country_file = str(data_dir / "country_EUROPE_EEZ_PARIS_gapfilled.nc")
 
+    # recompute basis functions...
+    basis_dict["fp_basis_algorithm"] = "weighted"
+    basis_dict["fp_basis_case"] = None
+
     rhime_co2.rhime_inversions(
         obs_dict=obs_dict,
         flux_dict=flux_dict,
