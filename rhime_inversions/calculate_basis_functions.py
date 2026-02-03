@@ -549,9 +549,12 @@ def bucketbasisfunction(
             print("Calculating basis functions over entire model domain")
 
             # Use median grid value as starting point for buckets value
-            starting_bucket_value = np.nanmedian(fps)
+            # starting_bucket_value = np.nanmedian(fps)
+            starting_bucket_value = max([np.nanmedian(fps), np.nansum(fps) / nbasis])
             bucket_basis_i = nregion_landsea_basis(fps, starting_bucket_value, nbasis[i])
             basis_per_sector[emissions_name[i]] = np.expand_dims(bucket_basis_i, axis=2)
+
+            print(f"Found {bucket_basis_i.max()} basis functions.")
 
         else:
             print(
@@ -559,7 +562,6 @@ def bucketbasisfunction(
             )
             print("Calculating basis functions over an inner domain only.")
 
-            # Find sub-domain where fluxes exist
             i_min, i_max = np.nanmin(fps_nonzero_inds[0]), np.nanmax(fps_nonzero_inds[0])
             j_min, j_max = np.nanmin(fps_nonzero_inds[1]), np.nanmax(fps_nonzero_inds[1])
 
@@ -567,13 +569,17 @@ def bucketbasisfunction(
 
             # Inner region where values exist
             fps_inner = fps[i_min : i_max + 1, j_min : j_max + 1]
-            starting_bucket_value = np.nanmedian(fps_inner)
+
+            nbasis_inner = max([1, nbasis[i] - 8])
+
+            print("Possible starting values:", [np.nanmedian(fps_inner), np.nansum(fps_inner) / nbasis_inner])
+            starting_bucket_value = max([np.nanmedian(fps_inner), np.nansum(fps_inner) / nbasis_inner])
 
             # Use median grid value as starting point for buckets value
             bucket_basis_i = nregion_landsea_basis(
                 fps_inner,
                 starting_bucket_value,
-                nbasis[i],
+                nbasis_inner,
                 1,
                 j_min,
                 i_min,
@@ -581,45 +587,33 @@ def bucketbasisfunction(
 
             new_basis_grid = np.zeros(fps.shape)
 
-            # region 1
-            for k in range(0, i_min):
-                for j in range(0, j_min):
-                    new_basis_grid[k, j] = 1 + bucket_basis_i.max()
-            # region 2
-            for k in range(i_min, i_max):
-                for j in range(0, j_min):
-                    new_basis_grid[k, j] = 2 + bucket_basis_i.max()
-            # region 3
-            for k in range(i_max, n):
-                for j in range(0, j_min):
-                    new_basis_grid[k, j] = 3 + bucket_basis_i.max()
-            # region 4
-            for k in range(0, i_min):
-                for j in range(j_min, j_max):
-                    new_basis_grid[k, j] = 4 + bucket_basis_i.max()
-            # region 5
-            for k in range(i_max, n):
-                for j in range(j_min, j_max):
-                    new_basis_grid[k, j] = 5 + bucket_basis_i.max()
-            # region 6
-            for k in range(0, i_min):
-                for j in range(j_max, m):
-                    new_basis_grid[k, j] = 6 + bucket_basis_i.max()
-            # region 7
-            for k in range(i_min, i_max):
-                for j in range(j_max, m):
-                    new_basis_grid[k, j] = 7 + bucket_basis_i.max()
-            # region 8
-            for k in range(i_max, n):
-                for j in range(j_max, m):
-                    new_basis_grid[k, j] = 8 + bucket_basis_i.max()
-            # Inner region
-            for k in range(i_min, i_max):
-                for j in range(j_min, j_max):
-                    new_basis_grid[k, j] = bucket_basis_i[k - i_min, j - j_min]
+            bmax = bucket_basis_i.max()
+            print(f"Found {bmax} inner basis functions.")
 
-            # Add sector basis function to dict
+            # region 1
+            new_basis_grid[0:i_min, 0:j_min] = 1 + bmax
+            # region 2
+            new_basis_grid[i_min:i_max, 0:j_min] = 2 + bmax
+            # region 3
+            new_basis_grid[i_max:n, 0:j_min] = 3 + bmax
+            # region 4
+            new_basis_grid[0:i_min, j_min:j_max] = 4 + bmax
+            # region 5
+            new_basis_grid[i_max:n, j_min:j_max] = 5 + bmax
+            # region 6
+            new_basis_grid[0:i_min, j_max:m] = 6 + bmax
+            # region 7
+            new_basis_grid[i_min:i_max, j_max:m] = 7 + bmax
+            # region 8
+            new_basis_grid[i_max:n, j_max:m] = 8 + bmax
+
+            # Inner region
+            new_basis_grid[i_min:i_max, j_min:j_max] = bucket_basis_i[
+                0 : (i_max - i_min), 0 : (j_max - j_min)
+            ]  # Add sector basis function to dict
             basis_per_sector[emissions_name[i]] = np.expand_dims(new_basis_grid, axis=2)
+
+            print(f"Found {bmax + 8} basis functions.")
 
     lon = data_dict[sites[0]].lon.values
     lat = data_dict[sites[0]].lat.values
