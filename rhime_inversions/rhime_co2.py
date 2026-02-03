@@ -170,7 +170,7 @@ def rhime_inversions(
             elif len(myerror) == len(fp_data[site]["mf_repeatability"].values):
                 myerror += fp_data[site]["mf_repeatability"].values ** 2
             else:
-                raise (
+                raise RuntimeError(
                     f"Error array length does not match length of mole fraction repeatability values for {site}."
                 )
         if "mf_variability" in fp_data[site]:
@@ -179,7 +179,7 @@ def rhime_inversions(
             elif len(myerror) == len(fp_data[site]["mf_variability"].values):
                 myerror += fp_data[site]["mf_variability"].values ** 2
             else:
-                raise (
+                raise RuntimeError(
                     f"Error array length does not match length of mole fraction variability values for {site}."
                 )
         error = np.concatenate((error, np.sqrt(myerror)))
