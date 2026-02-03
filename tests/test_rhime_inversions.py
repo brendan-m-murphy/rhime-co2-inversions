@@ -231,10 +231,12 @@ def test_example_config_post_data(tmpdir, mocker, rhime_test_config):
     #   basis(...) -> (basis_ds, basis_dir)
     #   basis_boundary_conditions(...) -> bc_basis_ds
     #   basis_boundary_conditions(...) -> (bc_basis_ds, bc_basis_dir)
-    mocker.patch(
-        "rhime_inversions.rhime_co2.cbf.basis",
-        return_value=basis_ds,  # or (basis_ds, "ignored/path")
-    )
+
+    # COMMENT OUT MOCK IF YOU'RE CALCULATING BASIC FUNCTIONS ON THE FLY!!!!
+    # mocker.patch(
+    #     "rhime_inversions.rhime_co2.cbf.basis",
+    #     return_value=basis_ds,  # or (basis_ds, "ignored/path")
+    # )
     mocker.patch(
         "rhime_inversions.rhime_co2.cbf.basis_boundary_conditions",
         return_value=bc_basis_ds,  # or (bc_basis_ds, "ignored/path")
@@ -253,6 +255,10 @@ def test_example_config_post_data(tmpdir, mocker, rhime_test_config):
     outputname = "TEST_"
     outputpath = str(tmpdir)
     country_file = str(data_dir / "country_EUROPE_EEZ_PARIS_gapfilled.nc")
+
+    # recompute basis functions...
+    basis_dict["fp_basis_algorithm"] = "weighted"
+    basis_dict["fp_basis_case"] = None
 
     rhime_co2.rhime_inversions(
         obs_dict=obs_dict,
