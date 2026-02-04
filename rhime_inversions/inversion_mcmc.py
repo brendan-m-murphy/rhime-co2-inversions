@@ -28,6 +28,11 @@ from .inversion_setup import offset_matrix
 # from openghg_inversions.hbmcmc.hbmcmc_output import define_output_filename
 # from openghg_inversions.config.version import code_version
 
+from .logging_utils import setup_rhime_logger
+
+
+logger = setup_rhime_logger(__name__)
+
 
 def get_function_dict():
     """
@@ -230,6 +235,55 @@ def inferpymc(
         nsites = 1
     nsigmas = np.amax(sigma_freq_index) + 1
 
+    logger.info(
+        "inferpymc: inputs Hx=%s Hxerr=%s hx=%s hxerr=%s basis_region_mask=%s Y=%s error=%s Ymodelerror=%s siteindicator=%s sigma_freq_index=%s use_bc=%s Hbc=%s",
+        np.shape(Hx),
+        np.shape(Hxerr),
+        hx.shape,
+        hxerr.shape,
+        np.shape(basis_region_mask),
+        np.shape(Y),
+        np.shape(error),
+        np.shape(Ymodelerror),
+        np.shape(siteindicator),
+        np.shape(sigma_freq_index),
+        use_bc,
+        np.shape(Hbc),
+    )
+    logger.info(
+        "inferpymc: derived nx=%s ny=%s nit=%s burn=%s tune=%s nchain=%s nsites=%s nsigmas=%s sigma_per_site=%s add_offset=%s",
+        nx,
+        ny,
+        nit,
+        burn,
+        tune,
+        nchain,
+        nsites,
+        nsigmas,
+        sigma_per_site,
+        add_offset,
+    )
+    try:
+        logger.info(
+            "inferpymc: finite checks Hx=%s Hxerr=%s Y=%s error=%s Ymodelerror=%s",
+            np.isfinite(Hx).all(),
+            np.isfinite(Hxerr).all(),
+            np.isfinite(Y).all(),
+            np.isfinite(error).all(),
+            np.isfinite(Ymodelerror).all(),
+        )
+        logger.info(
+            "inferpymc: ranges Y=[%s,%s] error=[%s,%s] Ymodelerror=[%s,%s]",
+            float(np.nanmin(Y)),
+            float(np.nanmax(Y)),
+            float(np.nanmin(error)),
+            float(np.nanmax(error)),
+            float(np.nanmin(Ymodelerror)),
+            float(np.nanmax(Ymodelerror)),
+        )
+    except Exception:
+        logger.exception("inferpymc: failed computing basic ranges / finite checks")
+
     if add_offset:
         B = offset_matrix(siteindicator)
 
@@ -241,7 +295,9 @@ def inferpymc(
         for i, key in enumerate(xprior.keys()):
             sector_len = len(np.squeeze(np.where(basis_region_mask == i + 1)))
             sector_mask = np.squeeze(np.where(basis_region_mask == i + 1))
-            print(f"Sector {key} is using {sector_len} basis functions")
+            logger.info("Sector %s is using %s basis functions", key, sector_len)
+            if sector_len == 0:
+                logger.warning("Sector %s has zero basis functions (basis_region_mask may be wrong).", key)
 
             # group_distributions = [parseprior(f"{key}_{j}", xprior[key], sigma_sf=hxerr_tmean[int(j+nsec_inds)]) for j in range(sector_len)]
             group_distributions = [parseprior(str(key), xprior[key], shape=sector_len)]
@@ -281,9 +337,44 @@ def inferpymc(
         step1 = pm.NUTS(vars=all_distributions_x)
         step2 = pm.Slice(vars=[sig])
 
+        # Log model structure
+        try:
+            logger.info("inferpymc: model free_RVs=%s", [rv.name for rv in model.free_RVs])
+            logger.info("inferpymc: model observed_RVs=%s", [rv.name for rv in model.observed_RVs])
+            logger.info("inferpymc: model deterministics=%s", [rv.name for rv in model.deterministics])
+        except Exception:
+            logger.exception("inferpymc: failed to log model RV lists")
+
+        # Important: convergence checks are what triggered your zero-size reduction error.
+        compute_convergence_checks = False
+        logger.info(
+            "inferpymc: calling pm.sample(nit=%s, tune=%s, chains=%s, cores=%s, progressbar=%s, compute_convergence_checks=%s)",
+            nit,
+            int(tune),
+            nchain,
+            nchain,
+            bool(verbose),
+            compute_convergence_checks,
+        )
+
         trace = pm.sample(
-            nit, tune=int(tune), chains=nchain, step=[step1, step2], progressbar=False, cores=nchain
-        )  # step=pm.Metropolis())#  #target_accept=0.8,
+            nit,
+            tune=int(tune),
+            chains=nchain,
+            step=[step1, step2],
+            progressbar=bool(verbose),
+            cores=nchain,
+            compute_convergence_checks=compute_convergence_checks,
+        )
+
+    # Log trace structure (useful for diagnosing empty/odd posterior vars)
+    try:
+        logger.info("inferpymc: trace.posterior vars=%s", list(trace.posterior.data_vars))
+        for k in trace.posterior.data_vars:
+            v = trace.posterior[k]
+            logger.info("inferpymc: posterior[%s] dims=%s shape=%s", k, v.dims, v.shape)
+    except Exception:
+        logger.exception("inferpymc: failed to log trace.posterior structure")
 
     xouts = {}
     bcouts = {}
