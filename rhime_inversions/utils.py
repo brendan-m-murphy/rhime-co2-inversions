@@ -10,86 +10,7 @@ import dask.array as da
 from pathlib import Path
 from types import SimpleNamespace
 
-from openghg.analyse import combine_datasets as openghg_combine_datasets
-
-
-def open_ds(path, chunks=None, combine=None):
-    """
-    Function efficiently opens xarray datasets.
-    -----------------------------------
-    Args:
-      path (str):
-      chunks (dict, optional):
-        size of chunks for each dimension
-        e.g. {'lat': 50, 'lon': 50}
-        opens dataset with dask, such that it is opened 'lazily'
-        and all of the data is not loaded into memory
-        defaults to None - dataset is opened with out dask
-      combine (str, optional):
-        Way in which the data should be combined (if using chunks), either:
-        'by_coords': order the datasets before concatenating (default)
-        'nested': concatenate datasets in the order supplied
-
-    Returns:
-      ds (xarray)
-    -----------------------------------
-    """
-    if chunks is not None:
-        combine = "by_coords" if combine is None else combine
-        ds = xr.open_mfdataset(path, chunks=chunks, combine=combine)
-    else:
-        # use a context manager, to ensure the file gets closed after use
-        with xr.open_dataset(path) as ds:
-            ds.load()
-
-    return ds
-
-
-def read_netcdfs(files, dim="time", chunks=None, verbose=True):
-    """
-    The read_netcdfs function uses xarray to open sequential netCDF files and
-    and concatenates them along the specified dimension.
-    Note: this function makes sure that file is closed after open_dataset call.
-    -----------------------------------
-    Args:
-      files (list):
-        List of netCDF filenames.
-      dim (str, optional):
-        Dimension of netCDF to use for concatenating the files.
-        Default = "time".
-      chunks (dict):
-        size of chunks for each dimension
-        e.g. {'lat': 50, 'lon': 50}
-        opens dataset with dask, such that it is opened 'lazily'
-        and all of the data is not loaded into memory
-        defaults to None - dataset is opened with out dask
-
-    Returns:
-      xarray.Dataset:
-        All files open as one concatenated xarray.Dataset object
-    -----------------------------------
-    """
-    if verbose:
-        print("Reading and concatenating files ...")
-        for fname in files:
-            print(fname)
-
-    datasets = [open_ds(p, chunks=chunks) for p in sorted(files)]
-
-    # reindex all of the lat-lon values to a common one to prevent floating point error differences
-    with xr.open_dataset(files[0]) as temp:
-        fields_ds = temp.load()
-    fp_lat = fields_ds["lat"].values
-    fp_lon = fields_ds["lon"].values
-
-    datasets = [
-        ds.reindex(indexers={"lat": fp_lat, "lon": fp_lon}, method="nearest", tolerance=1e-5)
-        for ds in datasets
-    ]
-
-    combined = xr.concat(datasets, dim)
-
-    return combined
+from openghg_inversions.utils import open_ds, read_netcdfs, combine_datasets
 
 
 def indexesMatch(dsa, dsb):
@@ -136,74 +57,6 @@ def indexesMatch(dsa, dsb):
     return True
 
 
-def combine_datasets(
-    dataset_a: xr.Dataset,
-    dataset_b: xr.Dataset,
-    method: str | None = "nearest",
-    tolerance: float | None = None,
-) -> xr.Dataset:
-    """Merges two datasets and re-indexes to the first dataset.
-
-    If "fp" variable is found within the combined dataset,
-    the "time" values where the "lat", "lon" dimensions didn't match are removed.
-
-    NOTE: this is temporary solution while waiting for `.load()` to be added to openghg version of combine_datasets
-
-    Args:
-        dataset_a: First dataset to merge
-        dataset_b: Second dataset to merge
-        method: One of None, nearest, ffill, bfill.
-                See xarray.DataArray.reindex_like for list of options and meaning.
-                Defaults to ffill (forward fill)
-        tolerance: Maximum allowed tolerance between matches.
-
-    Returns:
-        xarray.Dataset: Combined dataset indexed to dataset_a
-    """
-    return openghg_combine_datasets(dataset_a, dataset_b.load(), method=method, tolerance=tolerance)
-
-
-# def combine_datasets(dsa, dsb, method="ffill", tolerance=None):
-#     """
-#     The combine_datasets function merges two datasets and re-indexes
-#     to the FIRST dataset. If "fp" variable is found within the combined
-#     dataset, the "time" values where the "lat","lon"dimensions didn't
-#     match are removed.
-
-#     Example:
-#         ds = combine_datasets(dsa, dsb)
-#     -----------------------------------
-#     Args:
-#       dsa (xarray.Dataset):
-#         First dataset to merge
-#       dsb (xarray.Dataset):
-#         Second dataset to merge
-#       method (str, optional):
-#         One of {None, ‘nearest’, ‘pad’/’ffill’, ‘backfill’/’bfill’}
-#         See xarray.DataArray.reindex_like for list of options and meaning.
-#         Default = "ffill" (forward fill)
-#       tolerance (int/float??):
-#         Maximum allowed tolerance between matches.
-
-#     Returns:
-#       xarray.Dataset:
-#         Combined dataset indexed to dsa
-#     -----------------------------------
-#     """
-#     # merge the two datasets within a tolerance and remove times that are NaN (i.e. when FPs don't exist)
-
-#     if not indexesMatch(dsa, dsb):
-#         dsb_temp = dsb.reindex_like(dsa, method, tolerance=tolerance)
-#     else:
-#         dsb_temp = dsb
-
-#     ds_temp = dsa.merge(dsb_temp)
-#     if "fp" in list(ds_temp.keys()):
-#         flag = np.where(np.isfinite(ds_temp.fp.mean(dim=["lat", "lon"]).values))
-#         ds_temp = ds_temp[dict(time=flag[0])]
-#     return ds_temp
-
-
 def synonyms(search_string, info, alternative_label="alt"):
     """
      Check to see if there are other names that we should be using for
@@ -229,9 +82,7 @@ def synonyms(search_string, info, alternative_label="alt"):
     # If not found, search synonyms
     if len(out_strings) == 0:
         for k in keys:
-            matched_strings = [
-                s for s in info[k][alternative_label] if s.upper() == search_string.upper()
-            ]
+            matched_strings = [s for s in info[k][alternative_label] if s.upper() == search_string.upper()]
             if len(matched_strings) != 0:
                 out_strings = [k]
                 break
@@ -434,9 +285,7 @@ def filtering(datasets_in, filters, keep_missing=False):
         """
 
         ti = [
-            i
-            for i, pblh in enumerate(dataset.PBLH)
-            if np.abs(float(dataset.inlet_height_magl) - pblh) > 50.0
+            i for i, pblh in enumerate(dataset.PBLH) if np.abs(float(dataset.inlet_height_magl) - pblh) > 50.0
         ]
 
         if len(ti) != 0:
@@ -457,9 +306,7 @@ def filtering(datasets_in, filters, keep_missing=False):
                 return dataset[dict(time=ti)]
 
         else:
-            print(
-                "PBLH filtering removed all datapoints so this filter is not applied to this site."
-            )
+            print("PBLH filtering removed all datapoints so this filter is not applied to this site.")
 
     filtering_functions = {
         "daily_median": daily_median,
@@ -480,13 +327,9 @@ def filtering(datasets_in, filters, keep_missing=False):
         for filt in filters:
             n_nofilter = datasets[site].time.values.shape[0]
             if filt in ["daily_median", "six_hr_mean", "pblh"]:
-                datasets[site] = filtering_functions[filt](
-                    datasets[site], keep_missing=keep_missing
-                )
+                datasets[site] = filtering_functions[filt](datasets[site], keep_missing=keep_missing)
             else:
-                datasets[site] = filtering_functions[filt](
-                    datasets[site], site, keep_missing=keep_missing
-                )
+                datasets[site] = filtering_functions[filt](datasets[site], site, keep_missing=keep_missing)
             n_filter = datasets[site].time.values.shape[0]
             n_dropped = n_nofilter - n_filter
             perc_dropped = np.round(n_dropped / n_nofilter * 100, 2)
@@ -560,9 +403,7 @@ def timeseries_HiTRes(
     -----------------------------------
     """
     if verbose:
-        print(
-            f"\nCalculating timeseries with {time_resolution} resolution, this might take a few minutes"
-        )
+        print(f"\nCalculating timeseries with {time_resolution} resolution, this might take a few minutes")
 
     # Retrieve HiTRes footprint
     if fp_HiTRes_ds is None and fp_file is None:
@@ -614,10 +455,7 @@ def timeseries_HiTRes(
         else flux_dict
     )
     flux = {
-        sector: {
-            freq: None if flux_freq is None else flux_freq
-            for freq, flux_freq in flux_sector.items()
-        }
+        sector: {freq: None if flux_freq is None else flux_freq for freq, flux_freq in flux_sector.items()}
         for sector, flux_sector in flux.items()
     }
 
@@ -644,14 +482,11 @@ def timeseries_HiTRes(
             # reindex the high frequency data to match the fp
             time_flux = np.arange(
                 fp_HiTRes_ds.time[0].values - np.timedelta64(max_H_back, "h"),
-                fp_HiTRes_ds.time[-1].values
-                + np.timedelta64(time_resolution[0], time_resolution[1].lower()),
+                fp_HiTRes_ds.time[-1].values + np.timedelta64(time_resolution[0], time_resolution[1].lower()),
                 time_resolution[0],
                 dtype=f"datetime64[{time_resolution[1].lower()}]",
             )
-            flux_sector["high_freq"] = flux_sector["high_freq"].reindex(
-                time=time_flux, method="ffill"
-            )
+            flux_sector["high_freq"] = flux_sector["high_freq"].reindex(time=time_flux, method="ffill")
         else:
             print(
                 f"\nWarning: no high frequency flux data for {sector}, estimating a timeseries using the low frequency data"
@@ -659,9 +494,7 @@ def timeseries_HiTRes(
             flux_sector["high_freq"] = None
 
         if "low_freq" not in flux_sector.keys() or flux_sector["low_freq"] is None:
-            print(
-                f"\nWarning: no low frequency flux data for {sector}, resampling from high frequency data"
-            )
+            print(f"\nWarning: no low frequency flux data for {sector}, resampling from high frequency data")
             flux_sector["low_freq"] = flux_sector["high_freq"].resample(time="MS").mean()
 
     # convert to array to use in numba loop
@@ -688,10 +521,7 @@ def timeseries_HiTRes(
         timeseries = {sector: da.zeros(len(time_array)) for sector in flux.keys()}
 
     # month and year of the start of the data - used to index the low res data
-    start = {
-        dd: getattr(np.datetime64(time_array[0], "h").astype(object), dd)
-        for dd in ["month", "year"]
-    }
+    start = {dd: getattr(np.datetime64(time_array[0], "h").astype(object), dd) for dd in ["month", "year"]}
 
     # put the time array into tqdm if we want a progress bar to show throughout the loop
     if verbose:
@@ -709,9 +539,7 @@ def timeseries_HiTRes(
 
         # get the correct index for the low res data
         # estimated using the difference between the current and start month and year
-        current = {
-            dd: getattr(np.datetime64(time, "h").astype(object), dd) for dd in ["month", "year"]
-        }
+        current = {dd: getattr(np.datetime64(time, "h").astype(object), dd) for dd in ["month", "year"]}
         tt_low = current["month"] - start["month"] + 12 * (current["year"] - start["year"])
 
         # select the high res emissions for the corresponding 24 hours
@@ -741,13 +569,10 @@ def timeseries_HiTRes(
         # --> mol/mol/mol/m2/s * mol/m2/s === mol / mol
         fpXflux_time = {sector: em_sec * fp_time[:, :, 1:] for sector, em_sec in emissions.items()}
         # multiply the monthly flux by the residual fp, at H_back==24
-        fpXflux_end = {
-            sector: em_end * fp_time[:, :, 0] for sector, em_end in emissions_end.items()
-        }
+        fpXflux_end = {sector: em_end * fp_time[:, :, 0] for sector, em_end in emissions_end.items()}
         # append the residual emissions
         fpXflux_time = {
-            sector: np.dstack((fp_fl, fpXflux_end[sector]))
-            for sector, fp_fl in fpXflux_time.items()
+            sector: np.dstack((fp_fl, fpXflux_end[sector])) for sector, fp_fl in fpXflux_time.items()
         }
 
         for sector, fp_fl in fpXflux_time.items():
@@ -801,9 +626,7 @@ def timeseries_HiTRes(
         if output_type.lower() == "dataset":
             fpXflux = fpXflux if fpXflux.chunks is None else fpXflux.compute()
         else:
-            fpXflux = {
-                sec: ff if ff.chunks is None else ff.compute() for sec, ff in fpXflux.items()
-            }
+            fpXflux = {sec: ff if ff.chunks is None else ff.compute() for sec, ff in fpXflux.items()}
 
         if output_type.lower() == "dataarray" and list(flux.keys()) == ["total"]:
             fpXflux = fpXflux["total"]
@@ -835,9 +658,7 @@ def timeseries_HiTRes(
         if output_type.lower() == "dataset":
             timeseries = timeseries if timeseries.chunks is None else timeseries.compute()
         else:
-            timeseries = {
-                sec: tt if tt.chunks is None else tt.compute() for sec, tt in timeseries.items()
-            }
+            timeseries = {sec: tt if tt.chunks is None else tt.compute() for sec, tt in timeseries.items()}
 
         if output_type.lower() == "dataarray" and list(flux.keys()) == ["total"]:
             timeseries = timeseries["total"]
@@ -922,9 +743,7 @@ def get_country(domain, country_file=None):
         elif "region" in f.variables:
             country = f.variables["region"][:, :]
         else:
-            raise ValueError(
-                f"Variables 'country' or 'region' not found in country file {filename}."
-            )
+            raise ValueError(f"Variables 'country' or 'region' not found in country file {filename}.")
 
         #         if (ukmo is True) or (uk_split is True):
         #             name_temp = f.variables['name'][:]
