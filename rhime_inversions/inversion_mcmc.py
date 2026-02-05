@@ -19,6 +19,8 @@ from scipy import stats
 from pathlib import Path
 from typing import Optional
 
+from openghg_inversions.hbmcmc.inversion_pymc import parse_prior as oi_parse_prior
+
 from . import convert
 from . import utils
 from .inversion_setup import offset_matrix
@@ -26,49 +28,57 @@ from .inversion_setup import offset_matrix
 # from openghg_inversions.hbmcmc.hbmcmc_output import define_output_filename
 # from openghg_inversions.config.version import code_version
 
+from .logging_utils import setup_rhime_logger
+
+
+logger = setup_rhime_logger(__name__)
+
+
 def get_function_dict():
     """
     Returns dictionary of PyMC distributions
     """
-    functiondict = {"uniform": pm.Uniform,
-                    "flat": pm.Flat,
-                    "halfflat": pm.HalfFlat,
-                    "normal": pm.Normal,
-                    "truncatednormal": pm.TruncatedNormal,
-                    "halfnormal": pm.HalfNormal,
-                    "skewnormal": pm.SkewNormal,
-                    "beta": pm.Beta,
-                    "kumaraswamy": pm.Kumaraswamy,
-                    "exponential": pm.Exponential,
-                    "laplace": pm.Laplace,
-                    "studentt": pm.StudentT,
-                    "halfstudentt": pm.HalfStudentT,
-                    "cauchy": pm.Cauchy,
-                    "halfcauchy": pm.HalfCauchy,
-                    "gamma": pm.Gamma,
-                    "inversegamma": pm.InverseGamma,
-                    "weibull": pm.Weibull,
-                    "lognormal": pm.Lognormal,
-                    "chisquared": pm.ChiSquared,
-                    "wald": pm.Wald,
-                    "pareto": pm.Pareto,
-                    "exgaussian": pm.ExGaussian,
-                    "vonmises": pm.VonMises,
-                    "triangular": pm.Triangular,
-                    "gumbel": pm.Gumbel,
-                    "rice": pm.Rice,
-                    "logistic": pm.Logistic,
-                    "logitnormal": pm.LogitNormal,
-                    "interpolated": pm.Interpolated,
-                   }
+    functiondict = {
+        "uniform": pm.Uniform,
+        "flat": pm.Flat,
+        "halfflat": pm.HalfFlat,
+        "normal": pm.Normal,
+        "truncatednormal": pm.TruncatedNormal,
+        "halfnormal": pm.HalfNormal,
+        "skewnormal": pm.SkewNormal,
+        "beta": pm.Beta,
+        "kumaraswamy": pm.Kumaraswamy,
+        "exponential": pm.Exponential,
+        "laplace": pm.Laplace,
+        "studentt": pm.StudentT,
+        "halfstudentt": pm.HalfStudentT,
+        "cauchy": pm.Cauchy,
+        "halfcauchy": pm.HalfCauchy,
+        "gamma": pm.Gamma,
+        "inversegamma": pm.InverseGamma,
+        "weibull": pm.Weibull,
+        "lognormal": pm.Lognormal,
+        "chisquared": pm.ChiSquared,
+        "wald": pm.Wald,
+        "pareto": pm.Pareto,
+        "exgaussian": pm.ExGaussian,
+        "vonmises": pm.VonMises,
+        "triangular": pm.Triangular,
+        "gumbel": pm.Gumbel,
+        "rice": pm.Rice,
+        "logistic": pm.Logistic,
+        "logitnormal": pm.LogitNormal,
+        "interpolated": pm.Interpolated,
+    }
     return functiondict
 
 
-def parseprior(name, 
-               prior_params, 
-               shape=(),
-               sigma_sf=0,
-              ):
+def parseprior(
+    name,
+    prior_params,
+    shape=(),
+    sigma_sf=0,
+):
     """
     Parses all continuous distributions for PyMC 3.8:
     https://docs.pymc.io/api/distributions/continuous.html
@@ -94,35 +104,36 @@ def parseprior(name,
     # Get a dictionary of the pdf arguments
     params = {x: prior_params[x] for x in prior_params if x != "pdf"}
     if "sigma" in params.keys():
-        params["sigma"] = np.sqrt(params["sigma"]**2 + sigma_sf**2)
+        params["sigma"] = np.sqrt(params["sigma"] ** 2 + sigma_sf**2)
     return functiondict[pdf.lower()](name, shape=shape, **params)
 
 
-def inferpymc(Hx,
-              Hxerr,
-              basis_region_mask,
-              Y,
-              error,
-              Ymodelerror,
-              siteindicator,
-              sigma_freq_index,
-              Hbc,
-              xprior,
-              bcprior,
-              sigprior,
-              nit=1e4,
-              burn=1500,
-              tune=3000,
-              nchain=2,
-              sigma_per_site=True,
-              offsetprior=None,
-              add_offset=False,
-              verbose=False,
-              save_trace=False,
-              use_bc=True,
-             ):
+def inferpymc(
+    Hx,
+    Hxerr,
+    basis_region_mask,
+    Y,
+    error,
+    Ymodelerror,
+    siteindicator,
+    sigma_freq_index,
+    Hbc,
+    xprior,
+    bcprior,
+    sigprior,
+    nit=1e4,
+    burn=1500,
+    tune=3000,
+    nchain=2,
+    sigma_per_site=True,
+    offsetprior=None,
+    add_offset=False,
+    verbose=False,
+    save_trace=False,
+    use_bc=True,
+):
     """
-    Uses PyMC for Bayesian inference of: 
+    Uses PyMC for Bayesian inference of:
     - Scaling of flux field
     - Scaling of boundary conditions (optional)
     - Model error scaling value
@@ -168,7 +179,7 @@ def inferpymc(Hx,
       add_offset (bool):
         Add an offset (intercept) to all sites but the first in the site list. Default False.
       min_model_error (float):
-        Minimum model error to impose on species baseline 
+        Minimum model error to impose on species baseline
       verbose:
         When True, prints progress bar
 
@@ -200,18 +211,20 @@ def inferpymc(Hx,
        - Allow non-iid variables
     -----------------------------------
     """
-    burn = int(burn)     # No. of iterations to discard in MCMC
-    hx = Hx.T            # Transpose of matrix of dosages with dimemsions of [t, region[sector]]
-    hxerr = Hxerr.T      # Transpose of matrix of coefficient of variability of dosages with dimensions of [t, region[sector]]
-    nx = hx.shape[1]     # No. basis functions for all sectors stacked 
-    ny = len(Y)          # No. time steps
-    nit = int(nit)       # Total no. of iterations in MCMC 
+    burn = int(burn)  # No. of iterations to discard in MCMC
+    hx = Hx.T  # Transpose of matrix of dosages with dimemsions of [t, region[sector]]
+    hxerr = (
+        Hxerr.T
+    )  # Transpose of matrix of coefficient of variability of dosages with dimensions of [t, region[sector]]
+    nx = hx.shape[1]  # No. basis functions for all sectors stacked
+    ny = len(Y)  # No. time steps
+    nit = int(nit)  # Total no. of iterations in MCMC
 
     if use_bc is True:
         hbc = Hbc.T
         nbc = hbc.shape[1]
-        
-    nflux = len(list(xprior.keys()))   # No. flux sectors
+
+    nflux = len(list(xprior.keys()))  # No. flux sectors
 
     # Convert siteindicator into a site indexer
     if sigma_per_site:
@@ -221,6 +234,55 @@ def inferpymc(Hx,
         _sites = np.zeros_like(siteindicator).astype(int)
         nsites = 1
     nsigmas = np.amax(sigma_freq_index) + 1
+
+    logger.info(
+        "inferpymc: inputs Hx=%s Hxerr=%s hx=%s hxerr=%s basis_region_mask=%s Y=%s error=%s Ymodelerror=%s siteindicator=%s sigma_freq_index=%s use_bc=%s Hbc=%s",
+        np.shape(Hx),
+        np.shape(Hxerr),
+        hx.shape,
+        hxerr.shape,
+        np.shape(basis_region_mask),
+        np.shape(Y),
+        np.shape(error),
+        np.shape(Ymodelerror),
+        np.shape(siteindicator),
+        np.shape(sigma_freq_index),
+        use_bc,
+        np.shape(Hbc),
+    )
+    logger.info(
+        "inferpymc: derived nx=%s ny=%s nit=%s burn=%s tune=%s nchain=%s nsites=%s nsigmas=%s sigma_per_site=%s add_offset=%s",
+        nx,
+        ny,
+        nit,
+        burn,
+        tune,
+        nchain,
+        nsites,
+        nsigmas,
+        sigma_per_site,
+        add_offset,
+    )
+    try:
+        logger.info(
+            "inferpymc: finite checks Hx=%s Hxerr=%s Y=%s error=%s Ymodelerror=%s",
+            np.isfinite(Hx).all(),
+            np.isfinite(Hxerr).all(),
+            np.isfinite(Y).all(),
+            np.isfinite(error).all(),
+            np.isfinite(Ymodelerror).all(),
+        )
+        logger.info(
+            "inferpymc: ranges Y=[%s,%s] error=[%s,%s] Ymodelerror=[%s,%s]",
+            float(np.nanmin(Y)),
+            float(np.nanmax(Y)),
+            float(np.nanmin(error)),
+            float(np.nanmax(error)),
+            float(np.nanmin(Ymodelerror)),
+            float(np.nanmax(Ymodelerror)),
+        )
+    except Exception:
+        logger.exception("inferpymc: failed computing basic ranges / finite checks")
 
     if add_offset:
         B = offset_matrix(siteindicator)
@@ -233,98 +295,136 @@ def inferpymc(Hx,
         for i, key in enumerate(xprior.keys()):
             sector_len = len(np.squeeze(np.where(basis_region_mask == i + 1)))
             sector_mask = np.squeeze(np.where(basis_region_mask == i + 1))
-            print(f"Sector {key} is using {sector_len} basis functions")
+            logger.info("Sector %s is using %s basis functions", key, sector_len)
+            if sector_len == 0:
+                logger.warning("Sector %s has zero basis functions (basis_region_mask may be wrong).", key)
 
             # group_distributions = [parseprior(f"{key}_{j}", xprior[key], sigma_sf=hxerr_tmean[int(j+nsec_inds)]) for j in range(sector_len)]
-            group_distributions = [parseprior(f"{key}_{j}", xprior[key]) for j in range(sector_len)]
+            group_distributions = [parseprior(str(key), xprior[key], shape=sector_len)]
             all_distributions_x.extend(group_distributions)
             nsec_inds += sector_len
-    
 
-        hx_dot_x = pt.dot(hx, all_distributions_x)
-        
-        # ---- Model error hyperparameter ---- # 
+        x = pt.concatenate(all_distributions_x, axis=0)
+        hx_dot_x = pt.dot(hx, x)
+
+        # ---- Model error hyperparameter ---- #
         sig = parseprior("sig", sigprior, shape=(nsites, nsigmas))
 
-        # ---- Boundary Conditions ---- # 
+        # ---- Boundary Conditions ---- #
         if use_bc is True:
-            xbc = [parseprior(f"xbc_{j}", bcprior) for j in range(nbc)]
-            all_distributions_x.extend(xbc)
+            xbc = parseprior("xbc", bcprior, shape=nbc)
+            all_distributions_x.append(xbc)
 
             if add_offset:
-                offset = parseprior("offset", offsetprior, shape=nsites-1)
+                offset = parseprior("offset", offsetprior, shape=nsites - 1)
                 offset_vec = pt.concatenate((np.array([0]), offset), axis=0)
-                mu = hx_dot_x + pt.dot(hbc, xbc) + pt.dot(B, offset_vec) 
+                mu = hx_dot_x + pt.dot(hbc, xbc) + pt.dot(B, offset_vec)
             else:
                 mu = hx_dot_x + pt.dot(hbc, xbc)
 
         else:
             if add_offset:
-                offset = parseprior("offset", offsetprior, shape=nsites-1)
+                offset = parseprior("offset", offsetprior, shape=nsites - 1)
                 offset_vec = pt.concatenate((np.array([0]), offset), axis=0)
-                mu = hx_dot_x + pt.dot(B, offset_vec) 
+                mu = hx_dot_x + pt.dot(B, offset_vec)
             else:
-                mu = hx_dot_x 
+                mu = hx_dot_x
 
-        model_error = Ymodelerror * sig[_sites, sigma_freq_index]    
+        model_error = Ymodelerror * sig[_sites, sigma_freq_index]
         epsilon = pt.sqrt(error**2 + model_error**2 + 0.25)
-        y = pm.Normal("y", mu=mu, sigma=np.sqrt(epsilon), observed=Y, shape=ny)
+        y = pm.Normal("y", mu=mu, sigma=pt.sqrt(epsilon), observed=Y, shape=ny)
 
         step1 = pm.NUTS(vars=all_distributions_x)
         step2 = pm.Slice(vars=[sig])
-        
-        trace = pm.sample(nit, 
-                          tune=int(tune), 
-                          chains=nchain,
-                          step=[step1, step2], 
-                          progressbar=False, 
-                          cores=nchain) #step=pm.Metropolis())#  #target_accept=0.8,
+
+        # Log model structure
+        try:
+            logger.info("inferpymc: model free_RVs=%s", [rv.name for rv in model.free_RVs])
+            logger.info("inferpymc: model observed_RVs=%s", [rv.name for rv in model.observed_RVs])
+            logger.info("inferpymc: model deterministics=%s", [rv.name for rv in model.deterministics])
+        except Exception:
+            logger.exception("inferpymc: failed to log model RV lists")
+
+        # Important: convergence checks are what triggered your zero-size reduction error.
+        compute_convergence_checks = False
+        logger.info(
+            "inferpymc: calling pm.sample(nit=%s, tune=%s, chains=%s, cores=%s, progressbar=%s, compute_convergence_checks=%s)",
+            nit,
+            int(tune),
+            nchain,
+            nchain,
+            bool(verbose),
+            compute_convergence_checks,
+        )
+
+        trace = pm.sample(
+            nit,
+            tune=int(tune),
+            chains=nchain,
+            step=[step1, step2],
+            progressbar=bool(verbose),
+            cores=nchain,
+            compute_convergence_checks=compute_convergence_checks,
+        )
+
+    # Log trace structure (useful for diagnosing empty/odd posterior vars)
+    try:
+        logger.info("inferpymc: trace.posterior vars=%s", list(trace.posterior.data_vars))
+        for k in trace.posterior.data_vars:
+            v = trace.posterior[k]
+            logger.info("inferpymc: posterior[%s] dims=%s shape=%s", k, v.dims, v.shape)
+    except Exception:
+        logger.exception("inferpymc: failed to log trace.posterior structure")
 
     xouts = {}
     bcouts = {}
 
-    # ---- Calculate Gelman-Rubin Statistic for each posterior ----- 
+    # ---- Calculate Gelman-Rubin Statistic for each posterior -----
     GelmanRubin_dict = {}
     for key in trace.posterior.keys():
         posterior_chain_means = []
         posterior_chain_var = []
         for i in range(nchain):
             posterior_chain_means.append(np.nanmean(trace.posterior[key].values[i, burn:nit]))
-            posterior_chain_var.append(np.nanstd(trace.posterior[key].values[i, burn:nit])**2)
-            
-        # Calculate Gelman-Rubin Convergence Diagnostic 
-        B = np.nanstd(posterior_chain_means)**2
+            posterior_chain_var.append(np.nanstd(trace.posterior[key].values[i, burn:nit]) ** 2)
+
+        # Calculate Gelman-Rubin Convergence Diagnostic
+        B = np.nanstd(posterior_chain_means) ** 2
         W = np.nanmean(posterior_chain_var)
-        L = nit-burn
-        GR_stat = (((L-1)/L)*W + (1/L)*B)/W
+        L = nit - burn
+        GR_stat = (((L - 1) / L) * W + (1 / L) * B) / W
 
         tolerance = 0.05
-        if np.abs((1-GR_stat)<tolerance):
-            GelmanRubin_dict[key] = {"convergence": "passed", 
-                                     "GR_value": GR_stat,
-                                    }
+        if np.abs((1 - GR_stat) < tolerance):
+            GelmanRubin_dict[key] = {
+                "convergence": "passed",
+                "GR_value": GR_stat,
+            }
 
-            # For MCMC posteriors that converge, append 0th chain 
-            # values to outs dictionary 
+            # For MCMC posteriors that converge, append 0th chain
+            # values to outs dictionary
             if key.split("_")[0] in xprior.keys():
                 xouts[key] = trace.posterior[key][0, burn:nit]
+                xouts[key] = trace.posterior[key].isel(chain=0, draw=slice(burn, nit))
             elif "xbc" in key:
                 bcouts[key] = trace.posterior[key][0, burn:nit]
             elif "sig" in key:
                 sigouts = trace.posterior["sig"][0, burn:nit]
             elif "offset" in key:
                 offsetouts = trace.posterior["offset"][0, burn:nit]
-            
+
         else:
-            GelmanRubin_dict[key] = {"convergence": "failed", 
-                                     "GR_value": GR_stat,
-                                    }
+            GelmanRubin_dict[key] = {
+                "convergence": "failed",
+                "GR_value": GR_stat,
+            }
             print(f"{key} did not achieve a Gelman-Rubin statistic within a 5% tolerance")
 
             # For MCMC posteriors that don't converge append values of 0.0 to
-            # dictionary 
+            # dictionary
             if key.split("_")[0] in xprior.keys():
-                xouts[key] = trace.posterior[key][0, burn:nit] * 0.0
+                # xouts[key] = trace.posterior[key][0, burn:nit] * 0.0
+                xouts[key] = trace.posterior[key].isel(chain=0, draw=slice(burn, nit)) * 0.0
             elif "xbc" in key:
                 bcouts[key] = trace.posterior[key][0, burn:nit] * 0.0
             elif "sig" in key:
@@ -332,108 +432,86 @@ def inferpymc(Hx,
             elif "offset" in key:
                 offsetouts = trace.posterior["offset"][0, burn:nit] * 0.0
 
-
     # Include option for calculating Monte Carlo standard Errors?
 
-
-    # X TERMS 
+    # X TERMS
     hx_dot_x_posterior = []
-    xouts_posterior = {}
-    
+    # xouts_posterior = {}
+
+    # equivalent to old version since I've made the x priors vectors instead of lists
+    xouts_posterior = {k: v.values.T for k, v in xouts.items()}
+
     # hx_dot_x_posterior has shape [nsector, nbasis, time, nit-burn]
     for i, key in enumerate(xprior.keys()):
-        sector_mask = np.squeeze(np.where(basis_region_mask == i+1))
-        hx_dot_x_posterior_sector = []
-        x_posterior_sector = []
-        # Combine each basis function per flux sector with posterior scale factors
-        for j in sector_mask:
-            k = np.mod(j, len(sector_mask))
-            xtrace_posterior_sector_key = f"{key}_{k}"
-            hx_sector = np.reshape(hx[:, j], (hx[:, j].shape[0], 1))
-            x_posterior = np.reshape(xouts[xtrace_posterior_sector_key].values, (xouts[xtrace_posterior_sector_key].values.shape[0], 1))
-            x_posterior_sector.append(xouts[xtrace_posterior_sector_key].values)
-            
-            hx_dot_x_posterior_sector.append([np.dot(hx_sector, x_posterior.T)])
-            
-        # Stack all basis functions per flux sector
-        # hx_dot_x_posterior should therefore just be [sector1, sector2, ..., sectorN]
-        # where ith sector has dimensions [time, basis function]
-        hx_dot_x_posterior.append(np.vstack(hx_dot_x_posterior_sector))
-        xouts_posterior[key] = np.vstack(x_posterior_sector)
+        sector_mask = np.squeeze(np.where(basis_region_mask == i + 1))
+        hx_dot_x_posterior_sector = hx[:, sector_mask] @ xouts_posterior[key]
+        hx_dot_x_posterior.append(hx_dot_x_posterior_sector)
 
-    # CALCULATE PERTURBED TRACE 
-    for i in range(len(xprior.keys())):
-        if i == 0:
-            YPERTtrace = np.sum(hx_dot_x_posterior[0], axis=0)
-        elif i!=0:
-            YPERTtrace += np.sum(hx_dot_x_posterior[i], axis=0) 
-        
-    # OFFSETS 
+    # CALCULATE PERTURBED TRACE
+    YPERTtrace = np.array(hx_dot_x_posterior).sum(axis=0)
+
+    # OFFSETS
     if add_offset:
-        offset_trace = np.hstack([np.zeros((int(nit-burn), 1)), offsetouts])
+        offset_trace = np.hstack([np.zeros((int(nit - burn), 1)), offsetouts])
         OFFSETtrace = np.dot(B, offset_trace.T)
 
     # BOUNDARY CONDITIONS
-    if use_bc: 
-        bcouts_array = np.zeros((int(nit-burn), nbc))
-        bcouts_array[:, 0] = bcouts["xbc_0"].values
-        bcouts_array[:, 1] = bcouts["xbc_1"].values
-        bcouts_array[:, 2] = bcouts["xbc_2"].values
-        bcouts_array[:, 3] = bcouts["xbc_3"].values
-        
+    if use_bc:
+        bcouts_array = next(iter(bcouts.values())).values
         YBCtrace = np.dot(Hbc.T, bcouts_array.T)
-        
-    # Sum over basis functions, then sectors for regional fluxes 
+
+    # Sum over basis functions, then sectors for regional fluxes
     if add_offset:
         Ytrace = np.squeeze(YPERTtrace + OFFSETtrace)
     else:
         Ytrace = np.squeeze(YPERTtrace)
-        
-    
-    # Collect outputs into dictionary 
-    result = {"xouts": xouts_posterior,
-              "sigouts": sigouts,
-              "Ytrace": Ytrace,
-              "convergence": GelmanRubin_dict, 
-              "step1": step1,
-              "step2": step2,
-             }
+
+    # Collect outputs into dictionary
+    result = {
+        "xouts": xouts_posterior,
+        "sigouts": sigouts,
+        "Ytrace": Ytrace,
+        "convergence": GelmanRubin_dict,
+        "step1": step1,
+        "step2": step2,
+    }
     if add_offset:
         result["offset_outs"] = offsetouts
         result["OFFSETtrace"] = OFFSETtrace
-        
+
     if use_bc:
         result["bcouts"] = bcouts_array
         result["YBCtrace"] = YBCtrace
-        
+
     return result
 
 
-def inferpymc_postprocessouts(mcmc_results,
-                              use_bc,
-                              mcmc_dict,
-                              Hx,
-                              Y,
-                              error,
-                              Ymodelerror,
-                              Ytime,
-                              siteindicator,
-                              sigma_freq_index,
-                              domain,
-                              species,
-                              sites,
-                              start_date,
-                              end_date,
-                              outputname,
-                              outputpath,
-                              country_unit_prefix,
-                              emissions_name,
-                              emissions_store,
-                              Hbc: Optional[np.ndarray] = None,
-                              fp_data=None,
-                              country_file=None,
-                              rerun_file=None,
-                             ):
+def inferpymc_postprocessouts(
+    mcmc_results,
+    use_bc,
+    mcmc_dict,
+    Hx,
+    Y,
+    error,
+    Ymodelerror,
+    Ytime,
+    siteindicator,
+    sigma_freq_index,
+    domain,
+    species,
+    sites,
+    start_date,
+    end_date,
+    outputname,
+    outputpath,
+    country_unit_prefix,
+    emissions_name,
+    emissions_store,
+    Hbc: Optional[np.ndarray] = None,
+    fp_data=None,
+    country_file=None,
+    rerun_file=None,
+):
     """
     Takes the output from inferpymc function, along with some other input
     information, and places it all in a netcdf output. This function also
@@ -554,8 +632,8 @@ def inferpymc_postprocessouts(mcmc_results,
 
     # Get parameters for output file
     nit = mcmc_dict["nit"] - mcmc_dict["burn"]  # No. of MCMC iterations used for inferring posterior
-    nx = Hx.shape[0] # No. basis functions for all sectors stacked 
-    ny = len(Y) # No. of time steps 
+    nx = Hx.shape[0]  # No. basis functions for all sectors stacked
+    ny = len(Y)  # No. of time steps
     nui = np.arange(2)
     steps = np.arange(nit)
     nparam = np.arange(nx)
@@ -567,8 +645,8 @@ def inferpymc_postprocessouts(mcmc_results,
         nOFF = np.arange(noff)
         OFFSETtrace = mcmc_results["OFFSETtrace"]
 
-        YmodmuOFF = np.mean(OFFSETtrace, axis=1)            # mean
-        YmodmedOFF = np.median(OFFSETtrace, axis=1)         # median
+        YmodmuOFF = np.mean(OFFSETtrace, axis=1)  # mean
+        YmodmedOFF = np.median(OFFSETtrace, axis=1)  # median
         YmodmodeOFF = np.zeros(shape=OFFSETtrace.shape[0])  # mode
 
         for i in range(0, OFFSETtrace.shape[0]):
@@ -591,9 +669,9 @@ def inferpymc_postprocessouts(mcmc_results,
         YBCtrace = mcmc_results["YBCtrace"]
         bcouts = mcmc_results["bcouts"]
 
-        YmodmuBC = np.mean(YBCtrace, axis=1)                # mean
-        YmodmedBC = np.median(YBCtrace, axis=1)             # median
-        YmodmodeBC = np.zeros(shape=YBCtrace.shape[0])      # mode
+        YmodmuBC = np.mean(YBCtrace, axis=1)  # mean
+        YmodmedBC = np.median(YBCtrace, axis=1)  # median
+        YmodmodeBC = np.zeros(shape=YBCtrace.shape[0])  # mode
 
         for i in range(0, YBCtrace.shape[0]):
             # if sufficient no. of iterations use a KDE to calculate mode
@@ -651,33 +729,37 @@ def inferpymc_postprocessouts(mcmc_results,
             site_lon[si] = fp_data[site].release_lon.values[0]
         bfds = fp_data[".basis"]
 
-    # ---- Calculate mean and mode posterior scale map and flux field ---- # 
+    # ---- Calculate mean and mode posterior scale map and flux field ---- #
     # NB. Basis field [sector, lat, lon, time]
-    scalemap_mu_dict = {}   # Mean scale map dictionary
-    scalemap_mode_dict = {} # Mode scale map dictionary 
+    scalemap_mu_dict = {}  # Mean scale map dictionary
+    scalemap_mode_dict = {}  # Mode scale map dictionary
 
     xouts = mcmc_results["xouts"]
     xoutsave = np.zeros(shape=(len(nparam), nit))
     nbasis_sectors = []
-    
+
     for i, flux_sector in enumerate(xouts.keys()):
         nbasis_sec = xouts[flux_sector].shape[0]
-        
-        xoutsave[int(np.sum(nbasis_sectors)): int(np.sum(nbasis_sectors)+nbasis_sec), :] = xouts[flux_sector]
-        nbasis_sectors.append(nbasis_sec)
-        
-        scalemap_mu = np.zeros_like(bfds[i].values)    # Mean scale map
-        scalemap_mode = np.zeros_like(bfds[i].values)  # Mode scale map
-        
-        for npm in range(1+int(bfds[i].values.max())):
-            scalemap_mu[np.squeeze(bfds[i].values)==npm] = np.mean(xouts[flux_sector][npm-1, :])
 
-            if np.nanmax(xouts[flux_sector][npm-1, :]) > np.nanmin(xouts[flux_sector][npm-1, :]):
-                xes = np.arange(np.nanmin(xouts[flux_sector][npm-1, :]), np.nanmax(xouts[flux_sector][npm-1, :]), 0.01)
-                kde = stats.gaussian_kde(xouts[flux_sector][npm-1, :]).evaluate(xes)
+        xoutsave[int(np.sum(nbasis_sectors)) : int(np.sum(nbasis_sectors) + nbasis_sec), :] = xouts[
+            flux_sector
+        ]
+        nbasis_sectors.append(nbasis_sec)
+
+        scalemap_mu = np.zeros_like(bfds[i].values)  # Mean scale map
+        scalemap_mode = np.zeros_like(bfds[i].values)  # Mode scale map
+
+        for npm in range(1 + int(bfds[i].values.max())):
+            scalemap_mu[np.squeeze(bfds[i].values) == npm] = np.mean(xouts[flux_sector][npm - 1, :])
+
+            if np.nanmax(xouts[flux_sector][npm - 1, :]) > np.nanmin(xouts[flux_sector][npm - 1, :]):
+                xes = np.arange(
+                    np.nanmin(xouts[flux_sector][npm - 1, :]), np.nanmax(xouts[flux_sector][npm - 1, :]), 0.01
+                )
+                kde = stats.gaussian_kde(xouts[flux_sector][npm - 1, :]).evaluate(xes)
                 scalemap_mode[np.squeeze(bfds[i].values) == npm] = xes[kde.argmax()]
             else:
-                scalemap_mode[np.squeeze(bfds[i].values) == npm] = np.mean(xouts[npm-1, :])
+                scalemap_mode[np.squeeze(bfds[i].values) == npm] = np.mean(xouts[flux_sector][npm - 1, :])
 
         scalemap_mu_dict[flux_sector] = scalemap_mu[:, :, 0]
         scalemap_mode_dict[flux_sector] = scalemap_mode[:, :, 0]
@@ -689,9 +771,8 @@ def inferpymc_postprocessouts(mcmc_results,
     for i, key in enumerate(xprior.keys()):
         scalemap_mu_flux[i] = scalemap_mu_dict[key]
         scalemap_mode_flux[i] = scalemap_mode_dict[key]
-    
-    
-    # Get Fluxes 
+
+    # Get Fluxes
     if rerun_file is not None:
         flux_array_all = np.expand_dims(rerun_file.fluxapriori.values, 2)
     else:
@@ -702,12 +783,11 @@ def inferpymc_postprocessouts(mcmc_results,
             for i, key in enumerate(xprior.keys()):
                 t_flux = fp_data[".flux"][key].data["time"]
                 if len(t_flux) > 1:
-                    # Use time-averaged flux field 
-                    apriori_flux[i,:,:] = xr.DataArray.mean(fp_data[".flux"][key].data.flux, dim="time")
+                    # Use time-averaged flux field
+                    apriori_flux[i, :, :] = xr.DataArray.mean(fp_data[".flux"][key].data.flux, dim="time")
                 else:
-                    apriori_flux[i,:,:] = fp_data[".flux"][key].data.flux.values[:,:,:]            
+                    apriori_flux[i, :, :] = fp_data[".flux"][key].data.flux.values[:, :, :]
 
-    
     # if flux_array_all.shape[2] == 1:
     #     print("\nAssuming flux prior is annual and extracting first index of flux array.")
     #     apriori_flux = flux_array_all[:, :, 0]
@@ -751,7 +831,7 @@ def inferpymc_postprocessouts(mcmc_results,
     cntry95 = np.zeros((nsector, len(cntrynames), len(nui)))
     cntrysd = np.zeros((nsector, len(cntrynames)))
     cntryprior = np.zeros((nsector, len(cntrynames)))
-        
+
     molarmass = convert.molar_mass(species)
 
     unit_factor = convert.prefix(country_unit_prefix)
@@ -761,8 +841,7 @@ def inferpymc_postprocessouts(mcmc_results,
     if rerun_file is not None:
         obs_units = rerun_file.Yobs.attrs["units"].split(" ")[0]
     else:
-        obs_units = str(fp_data[site].mf.attrs['units'])
-
+        obs_units = str(fp_data[site].mf.attrs["units"])
 
     fluxsector = []
     for i, key in enumerate(xprior.keys()):
@@ -770,16 +849,30 @@ def inferpymc_postprocessouts(mcmc_results,
         for ci, cntry in enumerate(cntrynames):
             cntrytottrace = np.zeros(len(steps))
             cntrytotprior = 0
-            
-            for bf in range(int(np.max(bfarray[i]))):   # bfarray runs from 0 to n-1
-                bothinds = np.logical_and(cntrygrid == ci, bfarray[i,:,:,0] == bf)
+
+            for bf in range(int(np.max(bfarray[i]))):  # bfarray runs from 0 to n-1
+                bothinds = np.logical_and(cntrygrid == ci, bfarray[i, :, :, 0] == bf)
                 cntrytottrace += (
-                    np.sum(area[bothinds].ravel() * apriori_flux[i, bothinds].ravel() * 3600 * 24 * 365 * molarmass)
+                    np.sum(
+                        area[bothinds].ravel()
+                        * apriori_flux[i, bothinds].ravel()
+                        * 3600
+                        * 24
+                        * 365
+                        * molarmass
+                    )
                     * xouts[key][bf, :]
                     / unit_factor
                 )
                 cntrytotprior += (
-                    np.sum(area[bothinds].ravel() * apriori_flux[i, bothinds].ravel() * 3600 * 24 * 365 * molarmass)
+                    np.sum(
+                        area[bothinds].ravel()
+                        * apriori_flux[i, bothinds].ravel()
+                        * 3600
+                        * 24
+                        * 365
+                        * molarmass
+                    )
                     / unit_factor
                 )
             cntrymean[i, ci] = np.mean(cntrytottrace)
@@ -797,44 +890,40 @@ def inferpymc_postprocessouts(mcmc_results,
             cntry95[i, ci, :] = az.hdi(cntrytottrace, 0.95)
             cntryprior[i, ci] = cntrytotprior
 
-    # Make convergence results suitable for saving 
-    conv_xpdf_gr = []       # Gelman-Rubin value for x
-    conv_xpdf_result = []   # Gelman-Rubin result for x 
+    # Make convergence results suitable for saving
+    conv_xpdf_gr = []  # Gelman-Rubin value for x
+    conv_xpdf_result = []  # Gelman-Rubin result for x
 
-    conv_sig_gr = []        # Gelman-Rubin value for model error 
-    conv_sig_result = []    # Gelman-Rubin result for model error
+    conv_sig_gr = []  # Gelman-Rubin value for model error
+    conv_sig_result = []  # Gelman-Rubin result for model error
 
-    conv_bc_gr = []         # Gelman-Rubin value for BCs 
-    conv_bc_result = []     # Gelman-Rubin result for BCs
+    conv_bc_gr = []  # Gelman-Rubin value for BCs
+    conv_bc_result = []  # Gelman-Rubin result for BCs
 
-    for i, key in enumerate(mcmc_results['convergence'].keys()):
+    for i, key in enumerate(mcmc_results["convergence"].keys()):
         if "sig" not in key or "xbc" not in key:
-            conv_xpdf_result.append(mcmc_results['convergence'][key]['convergence'])
-            conv_xpdf_gr.append(mcmc_results['convergence'][key]['GR_value'])
+            conv_xpdf_result.append(mcmc_results["convergence"][key]["convergence"])
+            conv_xpdf_gr.append(mcmc_results["convergence"][key]["GR_value"])
         elif "sig" in key:
-            conv_sig_result.append(mcmc_results['convergence'][key]['convergence'])
-            conv_sig_gr.append(mcmc_results['convergence'][key]['GR_value'])
+            conv_sig_result.append(mcmc_results["convergence"][key]["convergence"])
+            conv_sig_gr.append(mcmc_results["convergence"][key]["GR_value"])
         elif "xbc" in key:
-            conv_bc_result.append(mcmc_results['convergence'][key]['convergence'])
-            conv_bc_gr.append(mcmc_results['convergence'][key]['GR_value'])
+            conv_bc_result.append(mcmc_results["convergence"][key]["convergence"])
+            conv_bc_gr.append(mcmc_results["convergence"][key]["GR_value"])
 
-       
     # Make output netcdf file
     data_vars = {
         "Yobs": (["nmeasure"], Y),
         "Yerror": (["nmeasure"], error),
         "Ytime": (["nmeasure"], Ytime),
         "Ymodelerror_prior": (["nmeasure"], Ymodelerror),
-        
         "Yapriori": (["nmeasure"], Yapriori),
         "Ymodmean": (["nmeasure"], Ymodmu),
         "Ymodmedian": (["nmeasure"], Ymodmed),
         "Ymodmode": (["nmeasure"], Ymodmode),
         "Ymod95": (["nmeasure", "nUI"], Ymod95),
         "Ymod68": (["nmeasure", "nUI"], Ymod68),
-        
         "xtrace": (["nparam", "steps"], xoutsave),
-        
         "sigtrace": (["steps", "nsigma_site", "nsigma_time"], mcmc_results["sigouts"].values),
         "siteindicator": (["nmeasure"], siteindicator),
         "sigmafreqindex": (["nmeasure"], sigma_freq_index),
@@ -858,7 +947,7 @@ def inferpymc_postprocessouts(mcmc_results,
         "xsensitivity": (["nmeasure", "nparam"], Hx.T),
     }
 
-    coords = {       
+    coords = {
         "stepnum": (["steps"], steps),
         "paramnum": (["nlatent"], nparam),
         "measurenum": (["nmeasure"], nmeasure),
@@ -890,21 +979,21 @@ def inferpymc_postprocessouts(mcmc_results,
 
     if mcmc_dict["add_offset"] == True:
         data_vars.update(
-            {"Yoffmean": (["nmeasure"], YmodmuOFF),
-             "Yoffmedian": (["nmeasure"], YmodmedOFF),
-             "Yoffmode": (["nmeasure"], YmodmodeOFF),
-             "Yoff68": (["nmeasure", "nUI"], Ymod68OFF),
-             "Yoff95": (["nmeasure", "nUI"], Ymod95OFF),
+            {
+                "Yoffmean": (["nmeasure"], YmodmuOFF),
+                "Yoffmedian": (["nmeasure"], YmodmedOFF),
+                "Yoffmode": (["nmeasure"], YmodmodeOFF),
+                "Yoff68": (["nmeasure", "nUI"], Ymod68OFF),
+                "Yoff95": (["nmeasure", "nUI"], Ymod95OFF),
             }
         )
-
 
     outds = xr.Dataset(data_vars, coords=coords)
 
     outds.fluxaposteriori_mode.attrs["units"] = "mol/m2/s"
     outds.fluxaposteriori_mean.attrs["units"] = "mol/m2/s"
     outds.fluxapriori.attrs["units"] = "mol/m2/s"
-    
+
     outds.Yobs.attrs["units"] = obs_units + " " + "mol/mol"
     outds.Yapriori.attrs["units"] = obs_units + " " + "mol/mol"
     outds.Ymodmean.attrs["units"] = obs_units + " " + "mol/mol"
@@ -913,7 +1002,7 @@ def inferpymc_postprocessouts(mcmc_results,
     outds.Ymod95.attrs["units"] = obs_units + " " + "mol/mol"
     outds.Ymod68.attrs["units"] = obs_units + " " + "mol/mol"
     outds.Yerror.attrs["units"] = obs_units + " " + "mol/mol"
-    
+
     outds.countrymean.attrs["units"] = country_units
     outds.countrymedian.attrs["units"] = country_units
     outds.countrymode.attrs["units"] = country_units
@@ -969,15 +1058,15 @@ def inferpymc_postprocessouts(mcmc_results,
         outds.YmodmeanBC.attrs["longname"] = "mean of posterior simulated boundary conditions"
         outds.YmodmedianBC.attrs["longname"] = "median of posterior simulated boundary conditions"
         outds.YmodmodeBC.attrs["longname"] = "mode of posterior simulated boundary conditions"
-        outds.Ymod68BC.attrs[
-            "longname"
-        ] = " 0.68 Bayesian credible interval of posterior simulated boundary conditions"
-        outds.Ymod95BC.attrs[
-            "longname"
-        ] = " 0.95 Bayesian credible interval of posterior simulated boundary conditions"
-        outds.bctrace.attrs[
-            "longname"
-        ] = "trace of unitless scaling factors for boundary condition parameters"
+        outds.Ymod68BC.attrs["longname"] = (
+            " 0.68 Bayesian credible interval of posterior simulated boundary conditions"
+        )
+        outds.Ymod95BC.attrs["longname"] = (
+            " 0.95 Bayesian credible interval of posterior simulated boundary conditions"
+        )
+        outds.bctrace.attrs["longname"] = (
+            "trace of unitless scaling factors for boundary condition parameters"
+        )
         outds.bcsensitivity.attrs["longname"] = "boundary conditions sensitivity timeseries"
 
     if mcmc_dict["add_offset"] == True:
@@ -990,31 +1079,34 @@ def inferpymc_postprocessouts(mcmc_results,
         outds.Yoffmean.attrs["longname"] = "mean of posterior simulated offset between measurements"
         outds.Yoffmedian.attrs["longname"] = "median of posterior simulated offset between measurements"
         outds.Yoffmode.attrs["longname"] = "mode of posterior simulated offset between measurements"
-        outds.Yoff68.attrs["longname"] = " 0.68 Bayesian credible interval of posterior simulated offset between measurements"
-        outds.Yoff95.attrs["longname"] = " 0.95 Bayesian credible interval of posterior simulated offset between measurements"
-
+        outds.Yoff68.attrs["longname"] = (
+            " 0.68 Bayesian credible interval of posterior simulated offset between measurements"
+        )
+        outds.Yoff95.attrs["longname"] = (
+            " 0.95 Bayesian credible interval of posterior simulated offset between measurements"
+        )
 
     outds.attrs["Start date"] = start_date
     outds.attrs["End date"] = end_date
-    outds.attrs["Latent sampler"] = str(mcmc_results['step1'])[19:-25]
-    outds.attrs["Hyper sampler"] = str(mcmc_results['step2'])[19:-25]
+    outds.attrs["Latent sampler"] = str(mcmc_results["step1"])[19:-25]
+    outds.attrs["Hyper sampler"] = str(mcmc_results["step2"])[19:-25]
     outds.attrs["Burn in"] = str(int(mcmc_dict["burn"]))
     outds.attrs["Tuning steps"] = str(int(mcmc_dict["tune"]))
     outds.attrs["Number of chains"] = str(int(mcmc_dict["nchain"]))
     outds.attrs["Error for each site"] = str(mcmc_dict["sigma_per_site"])
     outds.attrs["Emissions Prior"] = str(mcmc_dict["xprior"])
-    outds.attrs["Model Error Prior"] = str(mcmc_dict["sigprior"]) 
-    
+    outds.attrs["Model Error Prior"] = str(mcmc_dict["sigprior"])
+
     # outds.attrs["Emissions Prior"] = "".join(["{0},{1},".format(k, v) for k, v in xprior.items()])[:-1]
     # outds.attrs["Model error Prior"] = "".join(["{0},{1},".format(k, v) for k, v in sigprior.items()])[:-1]
     if use_bc:
         # outds.attrs["BCs Prior"] = "".join(["{0},{1},".format(k, v) for k, v in bcprior.items()])[:-1]
         outds.attrs["Boundary Conditions prior"] = str(mcmc_dict["bcprior"])
-    
+
     if mcmc_dict["add_offset"] == True:
         # outds.attrs["Offset Prior"] = "".join(["{0},{1},".format(k, v) for k, v in offsetprior.items()])[:-1]
         outds.attrs["Offset Prior"] = str(mcmc_dict["offsetprior"])
-    
+
     outds.attrs["Creator"] = getpass.getuser()
     outds.attrs["Date created"] = str(pd.Timestamp("today"))
 
@@ -1024,8 +1116,6 @@ def inferpymc_postprocessouts(mcmc_results,
     outds.attrs["xPDF result"] = conv_xpdf_result
     outds.attrs["bcPDF result"] = conv_bc_result
     outds.attrs["sigPDF result"] = conv_sig_result
-
-
 
     # outds.attrs["Repository version"] = code_version()
 
@@ -1044,6 +1134,6 @@ def inferpymc_postprocessouts(mcmc_results,
     # output_filename = define_output_filename(outputpath, species, domain, outputname, start_date, ext=".nc")
 
     output_filename = os.path.join(outputpath, f"{species}_{domain}_{outputname}_{start_date}.nc")
-    
+
     Path(outputpath).mkdir(parents=True, exist_ok=True)
     outds.to_netcdf(output_filename, encoding=encoding, mode="w")
