@@ -37,6 +37,7 @@ import dateutil
 import time as tm
 import numpy as np
 import datetime as dt
+
 # from matplotlib.dates import julian2num, num2date
 from matplotlib.dates import num2date
 
@@ -47,52 +48,56 @@ from matplotlib.dates import num2date
 #     species_info=json.load(f)
 
 
-def julian2num(j): 
-    """ 
+def julian2num(j):
+    """
     Convert a Julian date (or sequence) to a Matplotlib date (or sequence).
-    
-    Parameters 
-    ---------- 
-    j : float or sequence of floats 
-        Julian dates (days relative to 4713 BC Jan 1, 12:00:00 Julian 
-        calendar or 4714 BC Nov 24, 12:00:00, proleptic Gregorian calendar). 
-  
-    Returns 
-    ------- 
-    float or sequence of floats 
-        Matplotlib dates (days relative to `.get_epoch`). 
-    """ 
+
+    Parameters
+    ----------
+    j : float or sequence of floats
+        Julian dates (days relative to 4713 BC Jan 1, 12:00:00 Julian
+        calendar or 4714 BC Nov 24, 12:00:00, proleptic Gregorian calendar).
+
+    Returns
+    -------
+    float or sequence of floats
+        Matplotlib dates (days relative to `.get_epoch`).
+    """
     from matplotlib.dates import get_epoch
-    ep = np.datetime64(get_epoch(), 'h').astype(float) / 24. 
-    ep0 = np.datetime64('0000-12-31T00:00:00', 'h').astype(float) / 24. 
-    # Julian offset defined above is relative to 0000-12-31, but we need 
-    # relative to our current epoch: 
+
+    ep = np.datetime64(get_epoch(), "h").astype(float) / 24.0
+    ep0 = np.datetime64("0000-12-31T00:00:00", "h").astype(float) / 24.0
+    # Julian offset defined above is relative to 0000-12-31, but we need
+    # relative to our current epoch:
     JULIAN_OFFSET = 1721424.5  # Julian date at 0000-12-31
-    det = JULIAN_OFFSET - ep0 + ep 
-    return np.subtract(j, det)  # Handles both scalar & nonscalar j. 
-  
-def num2julian(n): 
-    """ 
-    Convert a Matplotlib date (or sequence) to a Julian date (or sequence). 
- 
-    Parameters 
-    ---------- 
-    n : float or sequence of floats 
-        Matplotlib dates (days relative to `.get_epoch`). 
-  
-    Returns 
-    ------- 
-    float or sequence of floats 
-        Julian dates (days relative to 4713 BC Jan 1, 12:00:00). 
-    """ 
+    det = JULIAN_OFFSET - ep0 + ep
+    return np.subtract(j, det)  # Handles both scalar & nonscalar j.
+
+
+def num2julian(n):
+    """
+    Convert a Matplotlib date (or sequence) to a Julian date (or sequence).
+
+    Parameters
+    ----------
+    n : float or sequence of floats
+        Matplotlib dates (days relative to `.get_epoch`).
+
+    Returns
+    -------
+    float or sequence of floats
+        Julian dates (days relative to 4713 BC Jan 1, 12:00:00).
+    """
     from matplotlib.dates import get_epoch
-    ep = np.datetime64(get_epoch(), 'h').astype(float) / 24. 
-    ep0 = np.datetime64('0000-12-31T00:00:00', 'h').astype(float) / 24.
-    # Julian offset defined above is relative to 0000-12-31, but we need 
-    # relative to our current epoch: 
+
+    ep = np.datetime64(get_epoch(), "h").astype(float) / 24.0
+    ep0 = np.datetime64("0000-12-31T00:00:00", "h").astype(float) / 24.0
+    # Julian offset defined above is relative to 0000-12-31, but we need
+    # relative to our current epoch:
     JULIAN_OFFSET = 1721424.5  # Julian date at 0000-12-31
-    det = JULIAN_OFFSET - ep0 + ep 
-    return np.add(n, det)  # Handles both scalar & nonscalar j. 
+    det = JULIAN_OFFSET - ep0 + ep
+    return np.add(n, det)  # Handles both scalar & nonscalar j.
+
 
 def synonyms(search_string, info, alternative_label="alt"):
     """
@@ -144,7 +149,7 @@ def molar_mass(species):
         Molar mass of species (float)
     -----------------------------------
     """
-    from utils import load_json
+    from .utils import load_json
 
     species_info = load_json(filename="species_info.json")
     species_key = synonyms(species, species_info)
@@ -216,11 +221,7 @@ def concentration(units):
     unit_factor = (
         1e-12
         if units.lower() == "ppt"
-        else 1e-9
-        if units.lower() == "ppb"
-        else 1e-6
-        if units.lower() == "ppm"
-        else 1
+        else 1e-9 if units.lower() == "ppb" else 1e-6 if units.lower() == "ppm" else 1
     )
     if unit_factor == 1:
         print("Undefined prefix")

@@ -437,16 +437,18 @@ def inferpymc(
     # X TERMS
     hx_dot_x_posterior = []
     # xouts_posterior = {}
-    xouts_posterior = xouts  # equivalent to old version since I've made the x priors vectors instead of lists
+
+    # equivalent to old version since I've made the x priors vectors instead of lists
+    xouts_posterior = {k: v.values.T for k, v in xouts.items()}
 
     # hx_dot_x_posterior has shape [nsector, nbasis, time, nit-burn]
     for i, key in enumerate(xprior.keys()):
         sector_mask = np.squeeze(np.where(basis_region_mask == i + 1))
-        hx_dot_x_posterior_sector = hx[:, sector_mask] @ xouts_posterior[key].values.T
+        hx_dot_x_posterior_sector = hx[:, sector_mask] @ xouts_posterior[key]
         hx_dot_x_posterior.append(hx_dot_x_posterior_sector)
 
     # CALCULATE PERTURBED TRACE
-    YPERTtrace = np.sum(sum(hx_dot_x_posterior), axis=0)
+    YPERTtrace = np.array(hx_dot_x_posterior).sum(axis=0)
 
     # OFFSETS
     if add_offset:
@@ -757,7 +759,7 @@ def inferpymc_postprocessouts(
                 kde = stats.gaussian_kde(xouts[flux_sector][npm - 1, :]).evaluate(xes)
                 scalemap_mode[np.squeeze(bfds[i].values) == npm] = xes[kde.argmax()]
             else:
-                scalemap_mode[np.squeeze(bfds[i].values) == npm] = np.mean(xouts[npm - 1, :])
+                scalemap_mode[np.squeeze(bfds[i].values) == npm] = np.mean(xouts[flux_sector][npm - 1, :])
 
         scalemap_mu_dict[flux_sector] = scalemap_mu[:, :, 0]
         scalemap_mode_dict[flux_sector] = scalemap_mode[:, :, 0]

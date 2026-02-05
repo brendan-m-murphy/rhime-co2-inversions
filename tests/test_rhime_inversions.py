@@ -244,7 +244,7 @@ def test_example_config_post_data(tmpdir, mocker, rhime_test_config):
 
     # OPTIONAL: if you also want to avoid running the actual inversion/MCMC
     # mocker.patch("rhime_inversions.rhime_co2.inferpymc", return_value={"dummy": True})
-    mocker.patch("rhime_inversions.rhime_co2.inferpymc_postprocessouts", return_value=None)
+    # mocker.patch("rhime_inversions.rhime_co2.inferpymc_postprocessouts", return_value=None)
 
     obs_dict, fp_dict, flux_dict, bc_dict, basis_dict, mcmc_dict = rhime_test_config
 

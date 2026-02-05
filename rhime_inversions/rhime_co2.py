@@ -240,7 +240,7 @@ def rhime_inversions(
                     )
             elif use_bc is False:
                 Hmbc = np.zeros(0)
-
+            logger.info("Hmbc: %s", Hmbc.shape)
             if i == 0:
                 Hbc = np.copy(Hmbc)
                 Hx = fp_data[site].H.values

@@ -2,12 +2,17 @@
 # Created: 17 June 2024
 # Author: Atmospheric Chemistry Research Group, University of Bristol
 # *****************************************************************************
-# Inversion setup functions for MCMC 
+# Inversion setup functions for MCMC
 # *****************************************************************************
 
 import numpy as np
-import pandas as pd 
+import pandas as pd
 import xarray as xr
+
+from .logging_utils import setup_rhime_logger
+
+logger = setup_rhime_logger(__name__)
+
 
 def offset_matrix(siteindicator):
     """
@@ -72,6 +77,7 @@ def sigma_freq_indicies(ytime, sigma_freq):
 
     return output
 
+
 def opends(fn):
     """
     Open a netcdf dataset with xarray
@@ -89,6 +95,7 @@ def opends(fn):
         ds = load.load()
 
         return ds
+
 
 def monthly_bcs(start_date, end_date, site, fp_data):
     """
@@ -111,8 +118,11 @@ def monthly_bcs(start_date, end_date, site, fp_data):
         Sensitivity matrix by month for observations
     -----------------------------------
     """
-    allmonth = pd.date_range(start_date, end_date, freq="MS")[:-1]
+    allmonth = pd.date_range(start_date, end_date, freq="MS")
+    if allmonth[-1] == pd.to_datetime(end_date):
+        allmonth = allmonth[:-1]
     nmonth = len(allmonth)
+    logger.info("Monthly bc for %s has %s months", site, nmonth)
     curtime = pd.to_datetime(fp_data[site].time.values).to_period("M")
     pmonth = pd.to_datetime(fp_data[site].resample(time="MS").mean().time.values)
     hmbc = np.zeros((4 * nmonth, len(fp_data[site].time.values)))
@@ -129,6 +139,7 @@ def monthly_bcs(start_date, end_date, site, fp_data):
             count += 1
 
     return hmbc
+
 
 def create_bc_sensitivity(start_date, end_date, site, fp_data, freq):
     """
