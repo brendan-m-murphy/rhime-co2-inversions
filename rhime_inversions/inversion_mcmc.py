@@ -5,6 +5,7 @@
 # About
 #   Functions for performing RHIME inversion.
 # *****************************************************************************
+from __future__ import annotations
 import os
 import re
 import getpass
@@ -17,7 +18,7 @@ import pytensor.tensor as pt
 
 from scipy import stats
 from pathlib import Path
-from typing import Optional
+from typing import Any, Mapping, Optional
 
 from openghg_inversions.hbmcmc.inversion_pymc import parse_prior as oi_parse_prior
 
@@ -34,78 +35,34 @@ from .logging_utils import setup_rhime_logger
 logger = setup_rhime_logger(__name__)
 
 
-def get_function_dict():
-    """
-    Returns dictionary of PyMC distributions
-    """
-    functiondict = {
-        "uniform": pm.Uniform,
-        "flat": pm.Flat,
-        "halfflat": pm.HalfFlat,
-        "normal": pm.Normal,
-        "truncatednormal": pm.TruncatedNormal,
-        "halfnormal": pm.HalfNormal,
-        "skewnormal": pm.SkewNormal,
-        "beta": pm.Beta,
-        "kumaraswamy": pm.Kumaraswamy,
-        "exponential": pm.Exponential,
-        "laplace": pm.Laplace,
-        "studentt": pm.StudentT,
-        "halfstudentt": pm.HalfStudentT,
-        "cauchy": pm.Cauchy,
-        "halfcauchy": pm.HalfCauchy,
-        "gamma": pm.Gamma,
-        "inversegamma": pm.InverseGamma,
-        "weibull": pm.Weibull,
-        "lognormal": pm.Lognormal,
-        "chisquared": pm.ChiSquared,
-        "wald": pm.Wald,
-        "pareto": pm.Pareto,
-        "exgaussian": pm.ExGaussian,
-        "vonmises": pm.VonMises,
-        "triangular": pm.Triangular,
-        "gumbel": pm.Gumbel,
-        "rice": pm.Rice,
-        "logistic": pm.Logistic,
-        "logitnormal": pm.LogitNormal,
-        "interpolated": pm.Interpolated,
-    }
-    return functiondict
-
-
 def parseprior(
-    name,
-    prior_params,
-    shape=(),
-    sigma_sf=0,
-):
-    """
-    Parses all continuous distributions for PyMC 3.8:
-    https://docs.pymc.io/api/distributions/continuous.html
-    This format requires updating when the PyMC distributions update,
-    but is safest for code execution
-    -----------------------------------
-    Args:
-      name (str):
-        name of variable in the pymc model
-      prior_params (dict):
-        dict of parameters for the distribution,
-        including 'pdf' for the distribution to use
-      shape (array):
-        shape of distribution to be created.
-        Default shape = () is the same as used by PyMC3
-      sigma_sf (float):
-          Scale factor for sigma value of the pdf
-    -----------------------------------
-    """
-    functiondict = get_function_dict()
+    name: str,
+    prior_params: Mapping[str, Any],
+    sigma_sf: float | None = None,
+    **kwargs: Any,
+) -> pt.TensorVariable:
+    """Parse prior distribution parameters into a PyMC random variable.
 
-    pdf = prior_params["pdf"]
-    # Get a dictionary of the pdf arguments
-    params = {x: prior_params[x] for x in prior_params if x != "pdf"}
-    if "sigma" in params.keys():
-        params["sigma"] = np.sqrt(params["sigma"] ** 2 + sigma_sf**2)
-    return functiondict[pdf.lower()](name, shape=shape, **params)
+    This is a thin wrapper around `openghg_inversions.hbmcmc.inversion_pymc.parse_prior`
+    that optionally inflates the `sigma` parameter in quadrature by `sigma_sf`.
+
+    Args:
+        name: Name of the variable in the PyMC model.
+        prior_params: Parameters for the prior distribution, including the `pdf`
+            key describing which analytical distribution to use.
+        sigma_sf: Optional additional scale factor for the prior's `sigma` parameter.
+            If provided and `sigma` exists in `prior_params`, the effective sigma is:
+            `sqrt(sigma**2 + sigma_sf**2)`.
+        **kwargs: Additional keyword arguments forwarded to `oi_parse_prior`
+            (e.g., `shape`, `dims`).
+
+    Returns:
+        A PyTensor `TensorVariable` representing the parsed PyMC random variable.
+    """
+    params = dict(prior_params)
+    if "sigma" in params and sigma_sf is not None:
+        params["sigma"] = float(np.sqrt(params["sigma"] ** 2 + sigma_sf**2))
+    return oi_parse_prior(name, params, **kwargs)
 
 
 def inferpymc(
