@@ -159,6 +159,12 @@ def get_mf_bc_data(bc_dict: dict):
                     get_bc_data.data[key].values *= bc_dict["bc_sf"]
             else:
                 raise KeyError("Use a dict or float value for the BC scale factors.")
+
+    # if no units present, set to mol/mol
+    for d in "nesw":
+        if get_bc_data.data[f"vmr_{d}"].attrs.get("units") is None:
+            get_bc_data.data[f"vmr_{d}"].attrs["units"] = 1.0
+
     return get_bc_data
 
 
@@ -457,7 +463,9 @@ def get_mf_obs_sims(
                 )
                 split_by_sectors = len(flux_dict["source"]) > 1
                 scenario_combined = model_scenario.footprints_data_merge(
-                    calc_fp_x_flux=True, split_by_sectors=split_by_sectors
+                    calc_fp_x_flux=True,
+                    split_by_sectors=split_by_sectors,
+                    calc_bc_sensitivity=True,
                 )
 
                 # HACK to make new results of `footprints_data_merge` match previous format used here

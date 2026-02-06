@@ -12,6 +12,8 @@ import numpy as np
 import xarray as xr
 import logging
 
+from openghg_inversions.basis._helpers import bc_sensitivity
+
 from . import convert
 from . import calculate_basis_functions as cbf
 
@@ -391,142 +393,142 @@ def fp_sensitivity(data_dict: dict, domain: str, basis_case: str, basis_director
     return data_dict
 
 
-def bc_sensitivity(
-    data_dict,
-    domain,
-    basis_case,
-    bc_basis_directory=None,
-):
-    """
-    -------------------------------------------------------
-    The bc_sensitivity adds H_bc to the sensitivity matrix,
-    to each site xarray dataframe in fp_and_data.
-    -------------------------------------------------------
-    Args:
-        data_dict (dict):
-            Output from get_mf_obs_sims() function.
-            Dictionary of datasets.
+# def bc_sensitivity(
+#     data_dict,
+#     domain,
+#     basis_case,
+#     bc_basis_directory=None,
+# ):
+#     """
+#     -------------------------------------------------------
+#     The bc_sensitivity adds H_bc to the sensitivity matrix,
+#     to each site xarray dataframe in fp_and_data.
+#     -------------------------------------------------------
+#     Args:
+#         data_dict (dict):
+#             Output from get_mf_obs_sims() function.
+#             Dictionary of datasets.
 
-        domain (str):
-            Model domain name (str)
+#         domain (str):
+#             Model domain name (str)
 
-        basis_case (str):
-           Basis case to read in.
-           Examples of basis cases are "NESW","stratgrad".
+#         basis_case (str):
+#            Basis case to read in.
+#            Examples of basis cases are "NESW","stratgrad".
 
-        bc_basis_directory (str):
-           bc_basis_directory can be specified if files are
-           not in the default directory. Must point to a
-           directory which contains subfolders organized
-           by domain. (optional)
+#         bc_basis_directory (str):
+#            bc_basis_directory can be specified if files are
+#            not in the default directory. Must point to a
+#            directory which contains subfolders organized
+#            by domain. (optional)
 
-    Returns:
-      dict (xarray.Dataset):
-        Same format as data_dict with HBc
-        sensitivity matrix added.
-    -------------------------------------------------------
-    """
-    sites = [key for key in list(data_dict.keys()) if key[0] != "."]
+#     Returns:
+#       dict (xarray.Dataset):
+#         Same format as data_dict with HBc
+#         sensitivity matrix added.
+#     -------------------------------------------------------
+#     """
+#     sites = [key for key in list(data_dict.keys()) if key[0] != "."]
 
-    basis_func = cbf.basis_boundary_conditions(
-        domain=domain, basis_case=basis_case, bc_basis_directory=bc_basis_directory
-    )
-    # sort basis_func into time order
-    ind = basis_func.time.argsort()
-    timenew = basis_func.time[ind]
-    basis_func = basis_func.reindex({"time": timenew})
+#     basis_func = cbf.basis_boundary_conditions(
+#         domain=domain, basis_case=basis_case, bc_basis_directory=bc_basis_directory
+#     )
+#     # sort basis_func into time order
+#     ind = basis_func.time.argsort()
+#     timenew = basis_func.time[ind]
+#     basis_func = basis_func.reindex({"time": timenew})
 
-    species_info = load_json(filename="species_info.json")
+#     species_info = load_json(filename="species_info.json")
 
-    species = data_dict[sites[0]].attrs["species"]
-    species = synonyms(species, species_info)
+#     species = data_dict[sites[0]].attrs["species"]
+#     species = synonyms(species, species_info)
 
-    for site in sites:
-        # ES commented out line below as .bc not attribute. Also assume openghg adds all relevant particle data to file.
-        #        if fp_and_data[site].bc.chunks is not None:
-        for particles in [
-            "particle_locations_n",
-            "particle_locations_e",
-            "particle_locations_s",
-            "particle_locations_w",
-        ]:
-            data_dict[site][particles] = data_dict[site][particles].compute()
+#     for site in sites:
+#         # ES commented out line below as .bc not attribute. Also assume openghg adds all relevant particle data to file.
+#         #        if fp_and_data[site].bc.chunks is not None:
+#         for particles in [
+#             "particle_locations_n",
+#             "particle_locations_e",
+#             "particle_locations_s",
+#             "particle_locations_w",
+#         ]:
+#             data_dict[site][particles] = data_dict[site][particles].compute()
 
-        # compute any chemical loss to the BCs, use lifetime or else set loss to 1 (no loss)
-        if "lifetime" in species_info[species].keys():
-            lifetime = species_info[species]["lifetime"]
-            lifetime_hrs_list_or_float = convert.convert_to_hours(lifetime)
+#         # compute any chemical loss to the BCs, use lifetime or else set loss to 1 (no loss)
+#         if "lifetime" in species_info[species].keys():
+#             lifetime = species_info[species]["lifetime"]
+#             lifetime_hrs_list_or_float = convert.convert_to_hours(lifetime)
 
-            # calculate the lifetime_hrs associated with each time point in fp_and_data
-            # this is because lifetime can be a list of monthly values
+#             # calculate the lifetime_hrs associated with each time point in fp_and_data
+#             # this is because lifetime can be a list of monthly values
 
-            time_month = data_dict[site].time.dt.month
-            if type(lifetime_hrs_list_or_float) is list:
-                lifetime_hrs = [lifetime_hrs_list_or_float[item - 1] for item in time_month.values]
-            else:
-                lifetime_hrs = lifetime_hrs_list_or_float
+#             time_month = data_dict[site].time.dt.month
+#             if type(lifetime_hrs_list_or_float) is list:
+#                 lifetime_hrs = [lifetime_hrs_list_or_float[item - 1] for item in time_month.values]
+#             else:
+#                 lifetime_hrs = lifetime_hrs_list_or_float
 
-            loss_n = np.exp(-1 * data_dict[site].mean_age_particles_n / lifetime_hrs).rename("loss_n")
-            loss_e = np.exp(-1 * data_dict[site].mean_age_particles_e / lifetime_hrs).rename("loss_e")
-            loss_s = np.exp(-1 * data_dict[site].mean_age_particles_s / lifetime_hrs).rename("loss_s")
-            loss_w = np.exp(-1 * data_dict[site].mean_age_particles_w / lifetime_hrs).rename("loss_w")
+#             loss_n = np.exp(-1 * data_dict[site].mean_age_particles_n / lifetime_hrs).rename("loss_n")
+#             loss_e = np.exp(-1 * data_dict[site].mean_age_particles_e / lifetime_hrs).rename("loss_e")
+#             loss_s = np.exp(-1 * data_dict[site].mean_age_particles_s / lifetime_hrs).rename("loss_s")
+#             loss_w = np.exp(-1 * data_dict[site].mean_age_particles_w / lifetime_hrs).rename("loss_w")
 
-        else:
-            loss_n = data_dict[site].particle_locations_n.copy()
-            loss_e = data_dict[site].particle_locations_e.copy()
-            loss_s = data_dict[site].particle_locations_s.copy()
-            loss_w = data_dict[site].particle_locations_w.copy()
-            loss_n[:] = 1
-            loss_e[:] = 1
-            loss_s[:] = 1
-            loss_w[:] = 1
+#         else:
+#             loss_n = data_dict[site].particle_locations_n.copy()
+#             loss_e = data_dict[site].particle_locations_e.copy()
+#             loss_s = data_dict[site].particle_locations_s.copy()
+#             loss_w = data_dict[site].particle_locations_w.copy()
+#             loss_n[:] = 1
+#             loss_e[:] = 1
+#             loss_s[:] = 1
+#             loss_w[:] = 1
 
-        DS_particle_loc = xr.Dataset(
-            {
-                "particle_locations_n": data_dict[site]["particle_locations_n"],
-                "particle_locations_e": data_dict[site]["particle_locations_e"],
-                "particle_locations_s": data_dict[site]["particle_locations_s"],
-                "particle_locations_w": data_dict[site]["particle_locations_w"],
-                "loss_n": loss_n,
-                "loss_e": loss_e,
-                "loss_s": loss_s,
-                "loss_w": loss_w,
-            }
-        )
-        #                                 "bc":fp_and_data[site]["bc"]})
+#         DS_particle_loc = xr.Dataset(
+#             {
+#                 "particle_locations_n": data_dict[site]["particle_locations_n"],
+#                 "particle_locations_e": data_dict[site]["particle_locations_e"],
+#                 "particle_locations_s": data_dict[site]["particle_locations_s"],
+#                 "particle_locations_w": data_dict[site]["particle_locations_w"],
+#                 "loss_n": loss_n,
+#                 "loss_e": loss_e,
+#                 "loss_s": loss_s,
+#                 "loss_w": loss_w,
+#             }
+#         )
+#         #                                 "bc":fp_and_data[site]["bc"]})
 
-        DS_temp = combine_datasets(DS_particle_loc, data_dict[".bc"].data, method="ffill")
+#         DS_temp = combine_datasets(DS_particle_loc, data_dict[".bc"].data, method="ffill")
 
-        DS = combine_datasets(DS_temp, basis_func, method="ffill")
+#         DS = combine_datasets(DS_temp, basis_func, method="ffill")
 
-        DS = DS.transpose("height", "lat", "lon", "region", "time")
+#         DS = DS.transpose("height", "lat", "lon", "region", "time")
 
-        part_loc = np.hstack(
-            [
-                DS.particle_locations_n,
-                DS.particle_locations_e,
-                DS.particle_locations_s,
-                DS.particle_locations_w,
-            ]
-        )
+#         part_loc = np.hstack(
+#             [
+#                 DS.particle_locations_n,
+#                 DS.particle_locations_e,
+#                 DS.particle_locations_s,
+#                 DS.particle_locations_w,
+#             ]
+#         )
 
-        loss = np.hstack([DS.loss_n, DS.loss_e, DS.loss_s, DS.loss_w])
+#         loss = np.hstack([DS.loss_n, DS.loss_e, DS.loss_s, DS.loss_w])
 
-        vmr_ed = np.hstack([DS.vmr_n, DS.vmr_e, DS.vmr_s, DS.vmr_w])
+#         vmr_ed = np.hstack([DS.vmr_n, DS.vmr_e, DS.vmr_s, DS.vmr_w])
 
-        bf = np.hstack([DS.bc_basis_n, DS.bc_basis_e, DS.bc_basis_s, DS.bc_basis_w])
+#         bf = np.hstack([DS.bc_basis_n, DS.bc_basis_e, DS.bc_basis_s, DS.bc_basis_w])
 
-        H_bc = np.zeros((len(DS.coords["region"]), len(DS["particle_locations_n"]["time"])))
+#         H_bc = np.zeros((len(DS.coords["region"]), len(DS["particle_locations_n"]["time"])))
 
-        for i in range(len(DS.coords["region"])):
-            reg = bf[:, :, i, :]
-            H_bc[i, :] = np.nansum((part_loc * loss * vmr_ed * reg), axis=(0, 1))
+#         for i in range(len(DS.coords["region"])):
+#             reg = bf[:, :, i, :]
+#             H_bc[i, :] = np.nansum((part_loc * loss * vmr_ed * reg), axis=(0, 1))
 
-        sensitivity = xr.Dataset(
-            {"H_bc": (["region_bc", "time"], H_bc)},
-            coords={"region_bc": (DS.coords["region"].values), "time": (DS.coords["time"])},
-        )
+#         sensitivity = xr.Dataset(
+#             {"H_bc": (["region_bc", "time"], H_bc)},
+#             coords={"region_bc": (DS.coords["region"].values), "time": (DS.coords["time"])},
+#         )
 
-        data_dict[site] = data_dict[site].merge(sensitivity)
+#         data_dict[site] = data_dict[site].merge(sensitivity)
 
-    return data_dict
+#     return data_dict
