@@ -202,7 +202,7 @@ def quadtreebasisfunction(
         nbasis=nbasis,
     )
     _save_basis_dataset(basis_data_array, "quadtree", species, domain, outputdir, outputname)
-    return outputdir
+    return basis_data_array
 
 
 def bucketbasisfunction(
@@ -226,7 +226,7 @@ def bucketbasisfunction(
         nbasis=nbasis,
     )
     _save_basis_dataset(basis_data_array, "weighted", species, domain, outputdir, outputname)
-    return outputdir
+    return basis_data_array
 
 
 basis_functions = {
@@ -275,23 +275,23 @@ def basis_functions_wrapper(
             ) from exc
 
         print(f"Using {basis_function.description} to derive basis functions.")
-        tempdir = basis_function.algorithm(
-            source,
-            data_dict,
-            basis_dict.get("site"),
-            start_date,
-            domain,
-            "CO2",
-            outputname,
-            outputpath,
-            nbasis,
+        tempdir = outputpath or _default_outputdir()
+        basis_data_array = _normalise_basis_array(
+            basis_function.algorithm(
+                source,
+                data_dict,
+                basis_dict.get("site"),
+                start_date,
+                domain,
+                "CO2",
+                outputname,
+                tempdir,
+                nbasis,
+            ),
+            source=source,
         )
         basis_directory = tempdir
         fp_basis_case = _basis_case_name(basis_algorithm, "co2", outputname)
-        basis_data_array = _normalise_basis_array(
-            basis(domain=domain, basis_case=fp_basis_case, basis_directory=basis_directory).basis,
-            source=source,
-        )
 
     fp_data = fp_sensitivity(
         data_dict,
