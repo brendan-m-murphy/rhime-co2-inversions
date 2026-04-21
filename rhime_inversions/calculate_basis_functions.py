@@ -16,7 +16,7 @@ from openghg_inversions.basis._functions import quadtreebasisfunction as oi_quad
 
 try:  # Forward-compatible with newer openghg_inversions releases.
     from openghg_inversions.basis.basis_functions import BasisFunctions
-except ModuleNotFoundError:  # pragma: no cover - older released dependency.
+except (ModuleNotFoundError, ImportError):  # pragma: no cover - older released dependency.
     BasisFunctions = None  # type: ignore[assignment]
 
 from .sensitivity import bc_sensitivity, fp_sensitivity

@@ -34,13 +34,20 @@ def _get_basis_for_source(basis_func: xr.DataArray, source: str) -> xr.DataArray
     return basis_func.isel(source=0, drop=True)
 
 
+def _basis_region_value(value):
+    if isinstance(value, (np.integer, int)):
+        return int(value) + 1
+    return value.decode("ascii") if isinstance(value, bytes) else value
+
+
+def _region_label(value) -> str:
+    return str(_basis_region_value(value))
+
+
 def _prefixed_region_names(region_values: np.ndarray, source: str | None) -> list[str]:
     labels: list[str] = []
     for value in np.asarray(region_values):
-        if isinstance(value, (np.integer, int)):
-            label = str(int(value) + 1)
-        else:
-            label = str(value.decode("ascii") if isinstance(value, bytes) else value)
+        label = _region_label(value)
         labels.append(f"{source}-{label}" if source else label)
     return labels
 
@@ -71,7 +78,7 @@ def _compute_herr(fp_x_flux: xr.DataArray, basis_func: xr.DataArray, region_valu
         herr = np.zeros((len(region_values), ntime))
 
         for i, region in enumerate(np.asarray(region_values)):
-            region_label = int(region) + 1 if isinstance(region, (np.integer, int)) else region
+            region_label = _basis_region_value(region)
             region_idx = np.where(labels == region_label)[0]
             if region_idx.size == 0:
                 continue
