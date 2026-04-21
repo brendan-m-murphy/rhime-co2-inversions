@@ -105,8 +105,6 @@ def fp_sensitivity(
     basis_func: xr.DataArray | None = None,
     verbose=True,
 ) -> dict:
-    del verbose
-
     sites = [key for key in list(data_dict.keys()) if not key.startswith(".")]
     flux_sources = list(data_dict[".flux"].keys())
 
