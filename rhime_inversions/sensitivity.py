@@ -35,7 +35,7 @@ def _get_basis_for_source(basis_func: xr.DataArray, source: str) -> xr.DataArray
 
 
 def _basis_region_value(value):
-    if isinstance(value, int) or np.issubdtype(np.asarray(value).dtype, np.integer):
+    if np.issubdtype(np.asarray(value).dtype, np.integer):
         return int(value) + 1
     return value.decode("ascii") if isinstance(value, bytes) else value
 
@@ -168,7 +168,12 @@ def fp_sensitivity(
             data_dict[site]["Herr"] = xr.concat(herr_parts, dim="region")
         else:
             source = flux_sources[0] if flux_sources else None
-            fp_var_name = "fp_x_flux" if "fp_x_flux" in site_ds else f"Hall_{source}"
+            if "fp_x_flux" in site_ds:
+                fp_var_name = "fp_x_flux"
+            elif source is not None:
+                fp_var_name = f"Hall_{source}"
+            else:
+                raise KeyError("Could not determine footprint-times-flux variable for Herr calculation.")
             source_herr = _compute_herr(site_ds[fp_var_name], basis_func, sensitivity.region.values)
             region_names = _prefixed_region_names(sensitivity.region.values, source)
             data_dict[site]["H"] = sensitivity.assign_coords(region=region_names)

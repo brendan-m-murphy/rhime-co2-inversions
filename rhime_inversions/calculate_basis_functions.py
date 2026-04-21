@@ -16,7 +16,7 @@ from openghg_inversions.basis._functions import quadtreebasisfunction as oi_quad
 
 try:  # Forward-compatible with newer openghg_inversions releases.
     from openghg_inversions.basis.basis_functions import BasisFunctions
-except (ModuleNotFoundError, ImportError):  # pragma: no cover - older released dependency.
+except ImportError:  # pragma: no cover - older released dependency.
     BasisFunctions = None  # type: ignore[assignment]
 
 from .sensitivity import bc_sensitivity, fp_sensitivity
@@ -149,7 +149,7 @@ def _extract_flux_dataarray(flux_entry):
     return None
 
 
-def _build_basis_functions_object(data_dict: dict, basis_data_array: xr.DataArray):
+def _build_basis_functions_object(data_dict: dict, basis_data_array: xr.DataArray) -> object | None:
     if BasisFunctions is None or not hasattr(BasisFunctions, "from_basis_flat"):
         return None
 
