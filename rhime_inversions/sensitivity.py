@@ -35,7 +35,7 @@ def _get_basis_for_source(basis_func: xr.DataArray, source: str) -> xr.DataArray
 
 
 def _basis_region_value(value):
-    if isinstance(value, (np.integer, int)):
+    if isinstance(value, int) or np.issubdtype(type(value), np.integer):
         return int(value) + 1
     return value.decode("ascii") if isinstance(value, bytes) else value
 
@@ -105,6 +105,17 @@ def fp_sensitivity(
     basis_func: xr.DataArray | None = None,
     verbose=True,
 ) -> dict:
+    """Add footprint sensitivities using the upstream helper, then restore RHIME's legacy layout.
+
+    Args:
+        data_dict: RHIME/OpenGHG merged site dictionary.
+        domain: Inversion domain.
+        basis_case: Basis case name used when loading basis data from disk.
+        basis_directory: Optional directory containing basis files.
+        basis_func: Optional in-memory basis array. When provided, this is used directly
+            instead of reloading `basis_case` from `basis_directory`.
+        verbose: Retained for compatibility with the historical RHIME API.
+    """
     sites = [key for key in list(data_dict.keys()) if not key.startswith(".")]
     flux_sources = list(data_dict[".flux"].keys())
 
