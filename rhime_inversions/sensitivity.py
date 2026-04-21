@@ -35,7 +35,7 @@ def _get_basis_for_source(basis_func: xr.DataArray, source: str) -> xr.DataArray
 
 
 def _basis_region_value(value):
-    if isinstance(value, int) or np.issubdtype(type(value), np.integer):
+    if isinstance(value, int) or np.issubdtype(np.asarray(value).dtype, np.integer):
         return int(value) + 1
     return value.decode("ascii") if isinstance(value, bytes) else value
 

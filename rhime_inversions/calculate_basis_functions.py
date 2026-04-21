@@ -118,7 +118,8 @@ def _run_sectoral_basis_algorithm(
         )
 
     basis_arrays: list[xr.DataArray] = []
-    for source, nregion in zip(emissions_name, _normalise_nbasis(nbasis, len(emissions_name)), strict=True):
+    nbasis_values = _normalise_nbasis(nbasis, len(emissions_name))
+    for source, nregion in zip(emissions_name, nbasis_values, strict=True):
         sector_basis = algorithm(
             data_dict,
             start_date,
