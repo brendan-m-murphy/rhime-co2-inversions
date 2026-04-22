@@ -207,7 +207,6 @@ def test_basis_functions_wrapper_frozen(tmp_path, mocker, site, rhime_test_confi
 @pytest.mark.data_required
 def test_example_config_post_data(tmpdir, mocker, rhime_test_config):
     data_dict = get_data_dict()
-    basis_ds = get_basis()
     bc_basis_ds = get_bc_basis()
 
     # 1) mock the obs/sim gather step
@@ -306,7 +305,7 @@ def test_generate_weighted_basis_per_sector_timed(tmp_path, sector_key, nbasis):
     nbasis_one = [nbasis]
 
     t0 = time.perf_counter()
-    outdir = cbf.bucketbasisfunction(
+    basis_da = cbf.bucketbasisfunction(
         emissions_name=sources,
         data_dict=data_dict,
         sites=site,
@@ -320,9 +319,11 @@ def test_generate_weighted_basis_per_sector_timed(tmp_path, sector_key, nbasis):
     dt = time.perf_counter() - t0
 
     # Timing info (shows up with -s, or in CI logs if captured)
-    print(f"[timing] sector={sector_key} nbasis={nbasis} dt={dt:.2f}s outdir={outdir}")
+    print(f"[timing] sector={sector_key} nbasis={nbasis} dt={dt:.2f}s shape={basis_da.shape}")
 
-    # The algorithm writes a file; check it exists and is readable
+    assert isinstance(basis_da, xr.DataArray)
+
+    # The algorithm still writes a file; check it exists and is readable
     # Filenames from code:
     # weighted_co2-{outputname}_{domain}_{YYYY}{MM}.nc
     result_file = tmp_path / domain / f"weighted_co2-{outputname}_{domain}_201401.nc"

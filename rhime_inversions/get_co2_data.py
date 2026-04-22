@@ -456,27 +456,25 @@ def get_mf_obs_sims(
                     bc=data_dict[".bc"],
                 )
                 split_by_sectors = len(flux_dict["source"]) > 1
+                data_dict[".split_by_sectors"] = split_by_sectors
                 scenario_combined = model_scenario.footprints_data_merge(
                     calc_fp_x_flux=True, split_by_sectors=split_by_sectors
                 )
 
-                # HACK to make new results of `footprints_data_merge` match previous format used here
+                # Preserve the modern ModelScenario outputs needed by openghg_inversions
+                # helpers, but continue exposing per-source mf_mod variables for RHIME.
                 if "source" in scenario_combined.dims:
                     mf_mod_var = (
                         "mf_mod_sectoral"
-                        if "mf_mod_sectoral" in scenario_combined.dims
+                        if "mf_mod_sectoral" in scenario_combined.data_vars
                         else "mf_mod_high_res_sectoral"
                     )
 
-                    for s in scenario_combined.coords["source"].values:
-                        scenario_combined[f"mf_mod_{s}"] = scenario_combined[mf_mod_var].sel(
-                            source=s, drop=True
-                        )
-                        scenario_combined[f"Hall_{s}"] = scenario_combined.fp_x_flux_sectoral.sel(
-                            source=s, drop=True
-                        )
-
-                    scenario_combined = scenario_combined.drop_vars([mf_mod_var, "fp_x_flux_sectoral"])
+                    if mf_mod_var in scenario_combined:
+                        for s in scenario_combined.coords["source"].values:
+                            scenario_combined[f"mf_mod_{s}"] = scenario_combined[mf_mod_var].sel(
+                                source=s, drop=True
+                            )
 
                 data_dict[site] = scenario_combined
                 # data_dict[site].bc_mod.values *= 1e-3 # convert from ppb (default in openghg) to ppm
