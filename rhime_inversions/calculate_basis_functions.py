@@ -157,7 +157,7 @@ def _build_basis_functions_object(data_dict: dict, basis_data_array: xr.DataArra
     if not flux_entries:
         return None
 
-    if "source" in basis_data_array.dims and hasattr(BasisFunctions, "from_multi_source_basis_flat"):
+    if "source" in basis_data_array.dims:
         basis_map = {}
         flux_map = {}
         for source in basis_data_array.coords["source"].values:
